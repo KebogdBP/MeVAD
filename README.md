@@ -7,8 +7,53 @@
 
 ## Статус
 
-Проект находится в Phase 0: Repository Audit and Cleanup. Исполняемый код ещё
-не добавлен; репозиторий формируется как новый greenfield-проект.
+Проект находится на границе Phase 0 и Phase 1. Уже доступны:
+
+- устанавливаемый Python-пакет `mevad`;
+- типизированные доменные модели;
+- проверка URL без сетевого доступа;
+- базовая защита от localhost и прямых private/reserved IP;
+- обнаружение FFmpeg и FFprobe;
+- CLI, тесты и автоматические quality gates.
+
+Скачивание медиа ещё не реализовано.
+
+## Требования
+
+- Python 3.11 или новее;
+- FFmpeg и FFprobe в `PATH` либо в переменных из `.env.example`.
+
+## Локальная установка
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
+```
+
+Проверка runtime:
+
+```bash
+mevad doctor
+```
+
+Безопасная синтаксическая проверка URL:
+
+```bash
+mevad validate-url "https://example.com/video"
+```
+
+Команда не обращается к сети. DNS и каждый redirect target будут повторно
+проверяться в будущем сетевом adapter перед соединением.
+
+## Проверки
+
+```bash
+ruff check .
+ruff format --check .
+mypy
+pytest --cov=mevad --cov-report=term-missing
+```
 
 ## Документы
 
@@ -35,4 +80,4 @@ FastAPI
 ```
 
 Разработка начнётся после завершения решений Phase 0, включая стратегию
-использования кода прежнего CLI, версию Python, lock tool и лицензию.
+использования кода прежнего CLI, lock tool и лицензию.

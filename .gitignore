@@ -7,8 +7,14 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
 .venv/
 venv/
+build/
+dist/
+*.egg-info/
 
 # Environment and secrets
 .env
@@ -33,4 +39,3 @@ storage/completed/
 storage/thumbnails/
 *.part
 *.ytdl
-
