@@ -45,6 +45,7 @@ Cutter/GIF из Phase 6 уже реализованы в core и выведен�
 - Next.js web workspace: анализ URL, превью, выбор Video/Audio/Clip/GIF action.
 - создание job, polling прогресса и отмена через server-side API proxy.
 - responsive SaaS-интерфейс и отдельные frontend quality gates.
+- proxy-enforced network sandbox для analyzer и media downloads в Compose.
 
 ## Требования
 
@@ -162,9 +163,10 @@ GET /health/ready
 POST /api/v1/media/analyze
 ```
 
-Remote analyzer по умолчанию выключен. `MEVAD_ANALYZER_ENABLED=true` допустимо
-включать только в окружении с сетевой SSRF-изоляцией. Интерактивная документация
-доступна по `/docs` и отключается через `MEVAD_API_DOCS_ENABLED=false`.
+Remote analyzer по умолчанию выключен. `MEVAD_ANALYZER_ENABLED=true` требует
+`MEVAD_NETWORK_SANDBOX=external_proxy` и `MEVAD_MEDIA_PROXY_URL`.
+Интерактивная документация доступна по `/docs` и отключается через
+`MEVAD_API_DOCS_ENABLED=false`.
 
 Job API:
 
@@ -202,8 +204,9 @@ npm run dev
 ```
 
 Next.js proxy использует `MEVAD_API_INTERNAL_URL` (по умолчанию
-`http://127.0.0.1:8000`). Remote analyzer остаётся выключенным до реализации
-network sandbox; интерфейс отображает это состояние как безопасную ошибку.
+`http://127.0.0.1:8000`). В Compose remote analyzer включён внутри
+proxy-enforced network sandbox. При локальном запуске он остаётся выключенным,
+пока явно не заданы sandbox mode и proxy URL.
 
 Для ручного запуска задайте `MEVAD_JOB_BACKEND=postgres`,
 `MEVAD_QUEUE_BACKEND=redis`, database/Redis URLs, затем запустите
@@ -241,6 +244,7 @@ npm run build
 - [Durable Job Infrastructure](docs/architecture/DURABLE_JOB_INFRASTRUCTURE.md)
 - [Managed yt-dlp Worker](docs/architecture/MANAGED_YT_DLP_WORKER.md)
 - [Web Workspace](docs/architecture/WEB_WORKSPACE.md)
+- [ADR 0023 — Proxy-enforced Network Sandbox](docs/adr/0023-proxy-enforced-network-sandbox.md)
 
 ## Планируемая архитектура
 
@@ -260,5 +264,4 @@ FastAPI
       └── FFmpeg
 ```
 
-Следующий критический инкремент добавит network sandbox для безопасного
-remote analyze/download, затем — контролируемую выдачу готовых файлов.
+Следующий критический инкремент добавит контролируемую выдачу готовых файлов.

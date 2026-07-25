@@ -3,6 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,6 +28,8 @@ class Settings(BaseSettings):
     api_docs_enabled: bool = True
     require_media_tools: bool = True
     analyzer_enabled: bool = False
+    network_sandbox: Literal["disabled", "external_proxy"] = "disabled"
+    media_proxy_url: str | None = None
     job_backend: Literal["memory", "postgres"] = "memory"
     queue_backend: Literal["memory", "redis"] = "memory"
     database_url: str = "postgresql+psycopg://mevad:mevad@localhost:5432/mevad"
@@ -70,6 +73,14 @@ class Settings(BaseSettings):
             raise ValueError("Worker heartbeat interval must be shorter than its lease.")
         if self.worker_retry_max_seconds < self.worker_retry_base_seconds:
             raise ValueError("Worker retry maximum must not be shorter than its base.")
+        if self.analyzer_enabled and self.network_sandbox != "external_proxy":
+            raise ValueError("Enabled analyzer requires the external proxy network sandbox.")
+        if self.network_sandbox == "external_proxy":
+            if self.media_proxy_url is None:
+                raise ValueError("External proxy network sandbox requires a media proxy URL.")
+            parsed = urlsplit(self.media_proxy_url)
+            if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
+                raise ValueError("Media proxy URL must be an absolute HTTP(S) URL.")
         return self
 
 

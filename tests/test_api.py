@@ -91,6 +91,17 @@ def test_settings_reject_retry_maximum_shorter_than_base() -> None:
         _settings(worker_retry_base_seconds=10, worker_retry_max_seconds=5)
 
 
+def test_settings_require_proxy_sandbox_for_enabled_analyzer() -> None:
+    with pytest.raises(ValidationError, match="external proxy network sandbox"):
+        _settings(analyzer_enabled=True, network_sandbox="disabled")
+
+    with pytest.raises(ValidationError, match="media proxy URL"):
+        _settings(network_sandbox="external_proxy", media_proxy_url=None)
+
+    with pytest.raises(ValidationError, match=r"absolute HTTP\(S\) URL"):
+        _settings(network_sandbox="external_proxy", media_proxy_url="socks5://proxy:1080")
+
+
 def test_analyzer_is_disabled_by_default_without_calling_adapter() -> None:
     analyzer = FakeAnalyzer()
     with _client(analyzer=analyzer) as client:
@@ -364,7 +375,11 @@ def _client(
 
 
 def _settings(**overrides: object) -> Settings:
-    return Settings.model_validate({"environment": "test", **overrides})
+    values: dict[str, object] = {"environment": "test", **overrides}
+    if values.get("analyzer_enabled") is True:
+        values.setdefault("network_sandbox", "external_proxy")
+        values.setdefault("media_proxy_url", "http://egress-proxy:3128")
+    return Settings.model_validate(values)
 
 
 def _analysis() -> MediaAnalysis:

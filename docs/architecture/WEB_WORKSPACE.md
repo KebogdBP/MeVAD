@@ -23,10 +23,10 @@ Compose web-контейнер обращается к API по имени се�
 - production standalone build;
 - отдельные lint, typecheck, unit test и build gates в CI.
 
-Remote analyzer остаётся выключенным по умолчанию. Его нельзя включать в
-публичном окружении до network sandbox, который проверяет DNS resolution и
-каждый redirect target. Поэтому текущий UI корректно показывает backend error,
-если безопасный analyzer ещё не активирован.
+Remote analyzer остаётся выключенным по умолчанию для локального запуска.
+Compose включает его только вместе с proxy-enforced network sandbox, который
+проверяет destination каждого соединения. UI корректно показывает backend
+error, если безопасный analyzer не активирован.
 
 ## Runtime
 
@@ -46,11 +46,10 @@ PostgreSQL + Redis + Worker
 
 ## Следующие продуктовые разрывы
 
-1. network sandbox для безопасного remote analyze/download;
-2. авторизованная выдача готового результата;
-3. component/integration tests с эмуляцией API;
-4. локальная загрузка файлов;
-5. SEO landing pages и Advanced Mode.
+1. авторизованная выдача готового результата;
+2. component/integration tests с эмуляцией API;
+3. локальная загрузка файлов;
+4. SEO landing pages и Advanced Mode.
 
 ## Dependency risk
 

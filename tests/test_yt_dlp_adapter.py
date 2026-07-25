@@ -123,6 +123,25 @@ def test_analyzes_playlist_as_workspace_action() -> None:
     assert result.available_actions == (MediaAction.PROCESS_PLAYLIST,)
 
 
+def test_analyzer_forces_proxy_and_ignores_user_configuration() -> None:
+    client = FakeYoutubeDL({"id": "video-1", "title": "Example", "formats": []})
+    captured: dict[str, Any] = {}
+
+    def factory(options: Mapping[str, Any]) -> FakeYoutubeDL:
+        captured.update(options)
+        return client
+
+    analyzer = YtDlpAnalyzer(
+        client_factory=factory,
+        proxy_url="http://egress-proxy:3128",
+    )
+    analyzer.analyze(MediaSource(kind=SourceKind.REMOTE_URL, value="https://example.com/video"))
+
+    assert captured["proxy"] == "http://egress-proxy:3128"
+    assert captured["ignoreconfig"] is True
+    assert captured["usenetrc"] is False
+
+
 def test_rejects_local_file_source() -> None:
     analyzer = YtDlpAnalyzer(client_factory=lambda _options: FakeYoutubeDL({}))
 

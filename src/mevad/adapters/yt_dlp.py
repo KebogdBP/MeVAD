@@ -36,8 +36,14 @@ ClientFactory: TypeAlias = Callable[[Mapping[str, Any]], ClientContext]
 class YtDlpAnalyzer:
     """Analyze remote media through yt-dlp without downloading the payload."""
 
-    def __init__(self, client_factory: ClientFactory | None = None) -> None:
+    def __init__(
+        self,
+        client_factory: ClientFactory | None = None,
+        *,
+        proxy_url: str | None = None,
+    ) -> None:
         self._client_factory = client_factory or _default_client_factory
+        self._proxy_url = proxy_url
 
     def analyze(self, source: MediaSource) -> MediaAnalysis:
         if source.kind is not SourceKind.REMOTE_URL:
@@ -53,6 +59,9 @@ class YtDlpAnalyzer:
             "socket_timeout": 15,
             "retries": 1,
             "extractor_retries": 1,
+            "ignoreconfig": True,
+            "usenetrc": False,
+            **({"proxy": self._proxy_url} if self._proxy_url is not None else {}),
         }
 
         try:

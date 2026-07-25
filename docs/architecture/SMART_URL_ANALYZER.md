@@ -66,20 +66,24 @@ security fixes меняются между релизами.
 - localhost;
 - прямые private, loopback, link-local и reserved IP.
 
-Этого недостаточно для публичного web API. `yt-dlp` самостоятельно выполняет
-DNS, redirects и дополнительные extractor requests, поэтому до запуска SaaS
-analyzer должен выполняться в отдельной сетевой песочнице:
+`yt-dlp` самостоятельно выполняет DNS, redirects и дополнительные extractor
+requests, поэтому публичный analyzer выполняется через отдельную сетевую
+песочницу:
 
 - без доступа к loopback и private networks;
 - без доступа к cloud metadata endpoints;
 - с разрешённым только исходящим HTTP(S);
-- с DNS и redirect policy на уровне proxy/firewall;
+- с DNS и redirect policy на уровне Squid proxy;
 - с таймаутом и лимитом количества запросов;
 - без пользовательских `netrc`, config files и произвольных external
   downloaders.
 
-До выполнения этих условий команда `mevad analyze` считается локальным
-developer/CLI-инструментом, а не готовым публичным endpoint.
+В Compose API и worker находятся во внутренней сети без прямого internet
+route. Egress proxy подключён одновременно к внутренней и внешней сети,
+проверяет destination каждого HTTP/HTTPS соединения и блокирует non-global
+диапазоны. Analyzer fail-closed: его нельзя включить без proxy sandbox и proxy
+URL. Вне Compose команда `mevad analyze` остаётся локальным developer/CLI
+инструментом.
 
 ## Тестирование
 

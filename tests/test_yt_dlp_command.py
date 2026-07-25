@@ -71,6 +71,7 @@ def test_managed_video_command_uses_typed_arguments(tmp_path: Path) -> None:
         runner=runner,
         timeout_seconds=90,
         executable=("python", "-m", "yt_dlp"),
+        proxy_url="http://egress-proxy:3128",
     )
     events: list[DownloadProgress] = []
 
@@ -88,6 +89,9 @@ def test_managed_video_command_uses_typed_arguments(tmp_path: Path) -> None:
     assert arguments[:3] == ["python", "-m", "yt_dlp"]
     assert arguments[arguments.index("--format") + 1]
     assert arguments[arguments.index("--merge-output-format") + 1] == "mp4"
+    assert arguments[arguments.index("--proxy") + 1] == "http://egress-proxy:3128"
+    assert "--ignore-config" in arguments
+    assert "--no-netrc" in arguments
     assert arguments[-1] == "https://example.com/video"
     assert timeout == 90
     assert result.output_path == output_path

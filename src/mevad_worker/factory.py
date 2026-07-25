@@ -23,6 +23,7 @@ def create_default_executor(
     lease_duration_seconds: int = 60,
     heartbeat_interval_seconds: int = 15,
     process_limits: ProcessLimits | None = None,
+    media_proxy_url: str | None = None,
 ) -> JobExecutor:
     """Compose the production-intent worker adapters."""
 
@@ -33,10 +34,12 @@ def create_default_executor(
             video_downloader=YtDlpCommandVideoDownloader(
                 timeout_seconds=media_timeout_seconds,
                 runner=runner,
+                proxy_url=media_proxy_url,
             ),
             audio_extractor=YtDlpCommandAudioExtractor(
                 timeout_seconds=media_timeout_seconds,
                 runner=runner,
+                proxy_url=media_proxy_url,
             ),
             video_cutter=FFmpegVideoCutter(runner=runner),
             loop_maker=FFmpegLoopMaker(runner=runner),

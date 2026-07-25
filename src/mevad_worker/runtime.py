@@ -195,6 +195,7 @@ def create_runtime(settings: Settings | None = None) -> WorkerRuntime:
                 file_size_bytes=selected.worker_file_size_limit_bytes,
                 open_files=selected.worker_open_files_limit,
             ),
+            media_proxy_url=selected.media_proxy_url,
         ),
         poll_timeout_seconds=selected.worker_poll_timeout_seconds,
         recovery_interval_seconds=selected.worker_recovery_interval_seconds,

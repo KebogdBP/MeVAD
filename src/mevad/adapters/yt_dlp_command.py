@@ -42,10 +42,12 @@ class YtDlpCommandVideoDownloader(VideoDownloader):
         runner: ProcessRunner = run_process,
         timeout_seconds: float = 7200,
         executable: Sequence[str] | None = None,
+        proxy_url: str | None = None,
     ) -> None:
         self._runner = runner
         self._timeout = timeout_seconds
         self._executable = tuple(executable or (sys.executable, "-m", "yt_dlp"))
+        self._proxy_url = proxy_url
 
     def download(
         self,
@@ -59,7 +61,7 @@ class YtDlpCommandVideoDownloader(VideoDownloader):
         _notify_started(on_progress)
         arguments = [
             *self._executable,
-            *_common_arguments(output_directory),
+            *_common_arguments(output_directory, proxy_url=self._proxy_url),
             "--format",
             build_video_format_selector(request.quality, request.container),
         ]
@@ -92,10 +94,12 @@ class YtDlpCommandAudioExtractor(AudioExtractor):
         runner: ProcessRunner = run_process,
         timeout_seconds: float = 7200,
         executable: Sequence[str] | None = None,
+        proxy_url: str | None = None,
     ) -> None:
         self._runner = runner
         self._timeout = timeout_seconds
         self._executable = tuple(executable or (sys.executable, "-m", "yt_dlp"))
+        self._proxy_url = proxy_url
 
     def extract(
         self,
@@ -109,7 +113,7 @@ class YtDlpCommandAudioExtractor(AudioExtractor):
         _notify_started(on_progress)
         arguments = [
             *self._executable,
-            *_common_arguments(output_directory),
+            *_common_arguments(output_directory, proxy_url=self._proxy_url),
             "--format",
             build_audio_format_selector(request.codec),
             "--extract-audio",
@@ -137,8 +141,10 @@ class YtDlpCommandAudioExtractor(AudioExtractor):
         return extraction
 
 
-def _common_arguments(output_directory: Path) -> list[str]:
-    return [
+def _common_arguments(output_directory: Path, *, proxy_url: str | None) -> list[str]:
+    arguments = [
+        "--ignore-config",
+        "--no-netrc",
         "--no-playlist",
         "--no-warnings",
         "--no-overwrites",
@@ -178,6 +184,9 @@ def _common_arguments(output_directory: Path) -> list[str]:
         "--print",
         f"after_move:{_PATH_MARKER}%(filepath)s",
     ]
+    if proxy_url is not None:
+        arguments[2:2] = ["--proxy", proxy_url]
+    return arguments
 
 
 def _parse_result(result: ProcessResult, output_directory: Path) -> tuple[str, str, Path]:

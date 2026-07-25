@@ -40,7 +40,9 @@ def create_app(
         openapi_url=openapi_url,
     )
     app.state.settings = selected_settings
-    app.state.media_analyzer = analyzer or YtDlpAnalyzer()
+    app.state.media_analyzer = analyzer or YtDlpAnalyzer(
+        proxy_url=selected_settings.media_proxy_url
+    )
     app.state.runtime_tools = runtime_tools or discover_runtime_tools()
     selected_queue = job_queue or _create_queue(selected_settings)
     app.state.job_queue = selected_queue
