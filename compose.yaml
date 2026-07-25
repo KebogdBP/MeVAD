@@ -54,6 +54,17 @@ services:
     volumes:
       - job-storage:/app/storage/jobs
 
+  web:
+    build:
+      context: ./apps/web
+    environment:
+      MEVAD_API_INTERNAL_URL: http://api:8000
+      NEXT_TELEMETRY_DISABLED: "1"
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
   worker:
     build: .
     command: ["mevad-worker"]

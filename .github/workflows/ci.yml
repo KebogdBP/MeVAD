@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  quality:
+  backend-quality:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -42,3 +42,34 @@ jobs:
 
       - name: CLI smoke test
         run: mevad --version
+
+  web-quality:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build

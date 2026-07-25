@@ -7,7 +7,10 @@
 
 ## Статус
 
-Проект последовательно проходит backend-фундамент Phase 1–4. Уже доступны:
+Backend-фундамент Phase 1–4 завершён. Сейчас проект находится на Phase 5:
+интеграция Video & Audio MVP в пользовательский web-сценарий. Возможности
+Cutter/GIF из Phase 6 уже реализованы в core и выведены в первый интерфейс, но
+сама Phase 6 ещё не закрыта. Уже доступны:
 
 - устанавливаемый Python-пакет `mevad`;
 - типизированные доменные модели;
@@ -39,12 +42,14 @@
 - leased TTL cleanup для job workspaces и результатов.
 - Linux rlimits для FFmpeg/yt-dlp и дочерних процессов.
 - отдельный worker process и локальный Docker Compose stack.
-
-Web-интерфейс ещё не реализован.
+- Next.js web workspace: анализ URL, превью, выбор Video/Audio/Clip/GIF action.
+- создание job, polling прогресса и отмена через server-side API proxy.
+- responsive SaaS-интерфейс и отдельные frontend quality gates.
 
 ## Требования
 
 - Python 3.11 или новее;
+- Node.js 24 для локальной frontend-разработки;
 - FFmpeg и FFprobe в `PATH` либо в переменных из `.env.example`.
 
 ## Локальная установка
@@ -188,6 +193,18 @@ permanent failure сразу переносится в dead-letter.
 Initial queue publication выполняет отдельный `mevad-outbox` relay: Redis
 outage не теряет job и не заставляет API откатывать уже созданный intent.
 
+Web workspace доступен на `http://localhost:3000`. Для запуска отдельно:
+
+```bash
+cd apps/web
+npm ci
+npm run dev
+```
+
+Next.js proxy использует `MEVAD_API_INTERNAL_URL` (по умолчанию
+`http://127.0.0.1:8000`). Remote analyzer остаётся выключенным до реализации
+network sandbox; интерфейс отображает это состояние как безопасную ошибку.
+
 Для ручного запуска задайте `MEVAD_JOB_BACKEND=postgres`,
 `MEVAD_QUEUE_BACKEND=redis`, database/Redis URLs, затем запустите
 `mevad-migrate`, `uvicorn mevad_api.app:app`, `mevad-outbox` и
@@ -201,6 +218,11 @@ ruff check .
 ruff format --check .
 mypy
 pytest --cov=mevad --cov=mevad_api --cov=mevad_worker --cov-report=term-missing
+cd apps/web
+npm run lint
+npm run typecheck
+npm test
+npm run build
 ```
 
 ## Документы
@@ -218,6 +240,7 @@ pytest --cov=mevad --cov=mevad_api --cov=mevad_worker --cov-report=term-missing
 - [Worker Execution Architecture](docs/architecture/WORKER_EXECUTION.md)
 - [Durable Job Infrastructure](docs/architecture/DURABLE_JOB_INFRASTRUCTURE.md)
 - [Managed yt-dlp Worker](docs/architecture/MANAGED_YT_DLP_WORKER.md)
+- [Web Workspace](docs/architecture/WEB_WORKSPACE.md)
 
 ## Планируемая архитектура
 
@@ -237,4 +260,5 @@ FastAPI
       └── FFmpeg
 ```
 
-Следующий инфраструктурный инкремент добавит network sandbox и observability.
+Следующий критический инкремент добавит network sandbox для безопасного
+remote analyze/download, затем — контролируемую выдачу готовых файлов.
