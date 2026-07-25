@@ -34,6 +34,7 @@ mevad = "mevad.cli:main"
 mevad-worker = "mevad_worker.runtime:main"
 mevad-outbox = "mevad_worker.outbox_runtime:main"
 mevad-migrate = "mevad.migrations:main"
+mevad-cleanup = "mevad_worker.cleanup_runtime:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

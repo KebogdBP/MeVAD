@@ -71,11 +71,13 @@ def _create_job_service(settings: Settings, queue: JobQueue) -> JobService:
             repository,
             outbox=SqlJobOutbox(repository),
             default_max_attempts=settings.job_max_attempts,
+            storage_retention_seconds=settings.storage_retention_seconds,
         )
     return JobService(
         InMemoryJobRepository(),
         queue=queue,
         default_max_attempts=settings.job_max_attempts,
+        storage_retention_seconds=settings.storage_retention_seconds,
     )
 
 

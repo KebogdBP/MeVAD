@@ -57,5 +57,7 @@ class Job:
     lease_expires_at: datetime | None = None
     claim_receipt: str | None = None
     result_reference: str | None = None
+    result_expires_at: datetime | None = None
+    storage_deleted_at: datetime | None = None
     error_code: str | None = None
     error_message: str | None = None

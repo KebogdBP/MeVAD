@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     outbox_batch_size: int = Field(default=100, ge=1, le=1000)
     job_max_attempts: int = Field(default=3, ge=1, le=10)
     storage_root: Path = Path("storage/jobs")
+    storage_retention_seconds: int = Field(default=86400, ge=60, le=2592000)
+    cleanup_poll_interval_seconds: float = Field(default=60, ge=0.1, le=3600)
+    cleanup_lease_seconds: int = Field(default=300, ge=5, le=3600)
+    cleanup_batch_size: int = Field(default=100, ge=1, le=1000)
 
     @model_validator(mode="after")
     def validate_worker_lease_timing(self) -> "Settings":

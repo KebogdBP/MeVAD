@@ -76,6 +76,16 @@ services:
       redis:
         condition: service_healthy
 
+  cleanup:
+    build: .
+    command: ["mevad-cleanup"]
+    environment: *mevad-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - job-storage:/app/storage/jobs
+
 volumes:
   job-storage:
   postgres-data:

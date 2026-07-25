@@ -122,6 +122,8 @@ def _to_response(job: Job) -> JobResponse:
         attempt_count=job.attempt_count,
         max_attempts=job.max_attempts,
         result_reference=job.result_reference,
+        result_expires_at=job.result_expires_at,
+        storage_deleted_at=job.storage_deleted_at,
         error_code=job.error_code,
         error_message=job.error_message,
     )

@@ -28,6 +28,7 @@ class JobService:
         queue: JobQueue | None = None,
         outbox: JobOutbox | None = None,
         default_max_attempts: int = 3,
+        storage_retention_seconds: int = 86400,
         clock: Clock | None = None,
         job_id_factory: JobIdFactory | None = None,
     ) -> None:
@@ -39,6 +40,9 @@ class JobService:
         if not 1 <= default_max_attempts <= 10:
             raise ValueError("Default max attempts must be between 1 and 10.")
         self._default_max_attempts = default_max_attempts
+        if not 60 <= storage_retention_seconds <= 2592000:
+            raise ValueError("Storage retention must be between 60 and 2592000 seconds.")
+        self._storage_retention_seconds = storage_retention_seconds
         self._clock = clock or _utc_now
         self._job_id_factory = job_id_factory or _new_job_id
 
@@ -192,6 +196,8 @@ class JobService:
             status=JobStatus.QUEUED,
             progress_percent=0,
             result_reference=None,
+            result_expires_at=None,
+            storage_deleted_at=None,
             error_code=None,
             error_message=None,
             lease_owner=None,
@@ -266,9 +272,11 @@ class JobService:
         error_code: str | None = None,
         error_message: str | None = None,
     ) -> Job:
+        now = self._clock()
+        target_status = status or job.status
         updated = replace(
             job,
-            status=status or job.status,
+            status=target_status,
             progress_percent=(
                 progress_percent if progress_percent is not None else job.progress_percent
             ),
@@ -285,7 +293,12 @@ class JobService:
             ),
             error_code=error_code if error_code is not None else job.error_code,
             error_message=error_message if error_message is not None else job.error_message,
-            updated_at=self._clock(),
+            result_expires_at=(
+                now + timedelta(seconds=self._storage_retention_seconds)
+                if target_status.is_terminal and not job.status.is_terminal
+                else job.result_expires_at
+            ),
+            updated_at=now,
             version=job.version + 1,
         )
         self._repository.update(updated, expected_version=job.version)

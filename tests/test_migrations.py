@@ -110,6 +110,7 @@ def test_repository_migrations_are_discoverable() -> None:
         "0003",
         "0004",
         "0005",
+        "0006",
     ]
     runner.close()
 

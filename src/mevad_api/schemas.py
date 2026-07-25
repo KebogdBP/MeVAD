@@ -195,5 +195,7 @@ class JobResponse(BaseModel):
     attempt_count: int
     max_attempts: int
     result_reference: str | None
+    result_expires_at: datetime | None
+    storage_deleted_at: datetime | None
     error_code: str | None
     error_message: str | None

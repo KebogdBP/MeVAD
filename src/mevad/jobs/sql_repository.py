@@ -26,6 +26,7 @@ from sqlalchemy.exc import IntegrityError
 from mevad.exceptions import ConcurrentJobUpdateError
 from mevad.jobs.models import Job, JobOperation, JobStatus
 from mevad.jobs.outbox import OutboxEvent
+from mevad.jobs.repository import StorageCleanupClaim
 
 metadata = MetaData()
 
@@ -47,6 +48,10 @@ jobs_table = Table(
     Column("lease_expires_at", DateTime(timezone=True), index=True),
     Column("claim_receipt", Text),
     Column("result_reference", Text),
+    Column("result_expires_at", DateTime(timezone=True), index=True),
+    Column("storage_deleted_at", DateTime(timezone=True)),
+    Column("cleanup_lease_owner", String(128)),
+    Column("cleanup_lease_expires_at", DateTime(timezone=True), index=True),
     Column("error_code", String(64)),
     Column("error_message", Text),
 )
@@ -127,6 +132,7 @@ class SqlJobRepository:
                 .where(
                     jobs_table.c.job_id == job.job_id,
                     jobs_table.c.version == expected_version,
+                    jobs_table.c.cleanup_lease_owner.is_(None),
                 )
                 .values(**_to_record(job))
             )
@@ -261,6 +267,126 @@ class SqlJobRepository:
             if result.rowcount != 1:
                 raise ConcurrentJobUpdateError("Outbox lease is no longer owned.")
 
+    def claim_storage_cleanup(
+        self,
+        *,
+        owner: str,
+        now: datetime,
+        lease_seconds: int,
+        limit: int,
+    ) -> tuple[StorageCleanupClaim, ...]:
+        if not owner or len(owner) > 128:
+            raise ValueError("Cleanup owner must be between 1 and 128 characters.")
+        if not 5 <= lease_seconds <= 3600:
+            raise ValueError("Cleanup lease must be between 5 and 3600 seconds.")
+        if not 1 <= limit <= 1000:
+            raise ValueError("Cleanup batch size must be between 1 and 1000.")
+        available = or_(
+            jobs_table.c.cleanup_lease_expires_at.is_(None),
+            jobs_table.c.cleanup_lease_expires_at <= now,
+        )
+        deadline = now + timedelta(seconds=lease_seconds)
+        claims: list[StorageCleanupClaim] = []
+        with self._engine.begin() as connection:
+            rows = (
+                connection.execute(
+                    select(jobs_table.c.job_id, jobs_table.c.result_expires_at)
+                    .where(
+                        jobs_table.c.status.in_(
+                            [
+                                JobStatus.SUCCEEDED.value,
+                                JobStatus.FAILED.value,
+                                JobStatus.CANCELLED.value,
+                            ]
+                        ),
+                        jobs_table.c.result_expires_at.is_not(None),
+                        jobs_table.c.result_expires_at <= now,
+                        jobs_table.c.storage_deleted_at.is_(None),
+                        available,
+                    )
+                    .order_by(jobs_table.c.result_expires_at)
+                    .limit(limit)
+                )
+                .mappings()
+                .all()
+            )
+            for row in rows:
+                result = connection.execute(
+                    update(jobs_table)
+                    .where(
+                        jobs_table.c.job_id == row["job_id"],
+                        jobs_table.c.status.in_(
+                            [
+                                JobStatus.SUCCEEDED.value,
+                                JobStatus.FAILED.value,
+                                JobStatus.CANCELLED.value,
+                            ]
+                        ),
+                        jobs_table.c.result_expires_at.is_not(None),
+                        jobs_table.c.result_expires_at <= now,
+                        jobs_table.c.storage_deleted_at.is_(None),
+                        available,
+                    )
+                    .values(
+                        cleanup_lease_owner=owner,
+                        cleanup_lease_expires_at=deadline,
+                        updated_at=now,
+                        version=jobs_table.c.version + 1,
+                    )
+                )
+                if result.rowcount == 1:
+                    claims.append(
+                        StorageCleanupClaim(
+                            job_id=str(row["job_id"]),
+                            result_expires_at=_as_utc(row["result_expires_at"]),
+                        )
+                    )
+        return tuple(claims)
+
+    def complete_storage_cleanup(
+        self,
+        job_id: str,
+        *,
+        owner: str,
+        completed_at: datetime,
+    ) -> None:
+        with self._engine.begin() as connection:
+            result = connection.execute(
+                update(jobs_table)
+                .where(
+                    jobs_table.c.job_id == job_id,
+                    jobs_table.c.cleanup_lease_owner == owner,
+                    jobs_table.c.storage_deleted_at.is_(None),
+                )
+                .values(
+                    result_reference=None,
+                    storage_deleted_at=completed_at,
+                    cleanup_lease_owner=None,
+                    cleanup_lease_expires_at=None,
+                    updated_at=completed_at,
+                    version=jobs_table.c.version + 1,
+                )
+            )
+            if result.rowcount != 1:
+                raise ConcurrentJobUpdateError("Storage cleanup lease is no longer owned.")
+
+    def release_storage_cleanup(self, job_id: str, *, owner: str) -> None:
+        with self._engine.begin() as connection:
+            result = connection.execute(
+                update(jobs_table)
+                .where(
+                    jobs_table.c.job_id == job_id,
+                    jobs_table.c.cleanup_lease_owner == owner,
+                    jobs_table.c.storage_deleted_at.is_(None),
+                )
+                .values(
+                    cleanup_lease_owner=None,
+                    cleanup_lease_expires_at=None,
+                )
+            )
+            if result.rowcount != 1:
+                raise ConcurrentJobUpdateError("Storage cleanup lease is no longer owned.")
+
 
 def _to_record(job: Job) -> dict[str, Any]:
     return {
@@ -279,6 +405,8 @@ def _to_record(job: Job) -> dict[str, Any]:
         "lease_expires_at": job.lease_expires_at,
         "claim_receipt": job.claim_receipt,
         "result_reference": job.result_reference,
+        "result_expires_at": job.result_expires_at,
+        "storage_deleted_at": job.storage_deleted_at,
         "error_code": job.error_code,
         "error_message": job.error_message,
     }
@@ -306,6 +434,16 @@ def _from_record(record: dict[str, Any]) -> Job:
         ),
         claim_receipt=_optional_string(record["claim_receipt"]),
         result_reference=_optional_string(record["result_reference"]),
+        result_expires_at=(
+            _as_utc(record["result_expires_at"])
+            if record["result_expires_at"] is not None
+            else None
+        ),
+        storage_deleted_at=(
+            _as_utc(record["storage_deleted_at"])
+            if record["storage_deleted_at"] is not None
+            else None
+        ),
         error_code=_optional_string(record["error_code"]),
         error_message=_optional_string(record["error_message"]),
     )

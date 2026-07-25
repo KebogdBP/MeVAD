@@ -156,6 +156,20 @@ Compose поднимает PostgreSQL, Redis с AOF, API, outbox relay и worker
 API/worker запускаются после healthchecks инфраструктуры и используют общий
 named volume результатов.
 
+## Storage retention
+
+Terminal transition назначает `result_expires_at`. Отдельный `mevad-cleanup`
+process арендует expired terminal rows, удаляет confined job workspace и
+очищает публичный `result_reference`. `storage_deleted_at` отличает истёкший
+результат от job, которая никогда не создавала файл.
+
+Настройки:
+
+- `MEVAD_STORAGE_RETENTION_SECONDS`;
+- `MEVAD_CLEANUP_POLL_INTERVAL_SECONDS`;
+- `MEVAD_CLEANUP_LEASE_SECONDS`;
+- `MEVAD_CLEANUP_BATCH_SIZE`.
+
 Для ручного обновления schema:
 
 ```bash
@@ -166,5 +180,4 @@ mevad-migrate
 
 - retry jitter;
 - command outbox для retry/dead-letter broker transitions;
-- result TTL/cleanup scheduler;
 - structured metrics and tracing.

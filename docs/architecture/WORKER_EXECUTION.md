@@ -149,7 +149,6 @@ error_message: The media job exceeded its processing deadline.
 отдельный process. Следующий infrastructure layer требует:
 
 - retry jitter;
-- storage TTL;
 - process-level resource limits;
 - network sandbox.
 

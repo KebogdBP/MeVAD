@@ -173,7 +173,10 @@ def create_runtime(settings: Settings | None = None) -> WorkerRuntime:
         selected.redis_url,
         queue_name=selected.redis_queue_name,
     )
-    service = JobService(repository)
+    service = JobService(
+        repository,
+        storage_retention_seconds=selected.storage_retention_seconds,
+    )
     worker_id = selected.worker_id or f"worker-{os.getpid()}-{uuid4().hex[:12]}"
     return WorkerRuntime(
         queue,

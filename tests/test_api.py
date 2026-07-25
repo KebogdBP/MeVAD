@@ -229,6 +229,8 @@ def test_creates_reads_and_cancels_video_job() -> None:
     assert cancel_response.status_code == 200
     assert cancel_response.json()["status"] == "cancelled"
     assert cancel_response.json()["version"] == 2
+    assert cancel_response.json()["result_expires_at"] is not None
+    assert cancel_response.json()["storage_deleted_at"] is None
 
 
 def test_job_api_validates_discriminated_options() -> None:

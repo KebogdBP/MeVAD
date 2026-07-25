@@ -153,6 +153,8 @@ GET /api/v1/jobs/{job_id}
 ```
 
 Клиент использует polling до terminal state. SSE/WebSocket появятся позже.
+Terminal response содержит `result_expires_at` и `storage_deleted_at`; после
+TTL `result_reference` становится `null`.
 
 ### Отмена
 
@@ -169,7 +171,6 @@ POST /api/v1/jobs/{job_id}/cancel
 Production Job System потребует:
 
 - retry jitter;
-- TTL результата;
 - idempotency keys;
 - per-user quotas;
 - structured job events.

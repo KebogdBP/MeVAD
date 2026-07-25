@@ -36,6 +36,7 @@
 - delayed exponential retries и transient/permanent error classification.
 - transactional PostgreSQL outbox для initial Redis dispatch.
 - checksum-verified versioned PostgreSQL migration runner.
+- leased TTL cleanup для job workspaces и результатов.
 - отдельный worker process и локальный Docker Compose stack.
 
 Web-интерфейс ещё не реализован.
@@ -189,7 +190,8 @@ outage не теряет job и не заставляет API откатыват
 Для ручного запуска задайте `MEVAD_JOB_BACKEND=postgres`,
 `MEVAD_QUEUE_BACKEND=redis`, database/Redis URLs, затем запустите
 `mevad-migrate`, `uvicorn mevad_api.app:app`, `mevad-outbox` и
-`mevad-worker` отдельно. Migration failure должна останавливать deployment.
+`mevad-worker`, `mevad-cleanup` отдельно. Migration failure должна
+останавливать deployment.
 
 ## Проверки
 
@@ -234,5 +236,5 @@ FastAPI
       └── FFmpeg
 ```
 
-Следующий инфраструктурный инкремент добавит retry backoff, TTL результатов,
-cleanup scheduler.
+Следующий инфраструктурный инкремент добавит process-level resource limits,
+network sandbox и observability.

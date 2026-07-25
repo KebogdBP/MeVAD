@@ -164,6 +164,39 @@ def test_sql_repository_finds_expired_leases(
     assert expired == (job,)
 
 
+def test_sql_repository_claims_and_completes_storage_cleanup(
+    sql_repository: SqlJobRepository,
+) -> None:
+    expires_at = datetime(2026, 7, 25, 12, 1, tzinfo=UTC)
+    job = replace(
+        _job(),
+        status=JobStatus.SUCCEEDED,
+        progress_percent=100,
+        result_reference="job-1/results/video.mp4",
+        result_expires_at=expires_at,
+    )
+    sql_repository.add(job)
+
+    claims = sql_repository.claim_storage_cleanup(
+        owner="cleanup-1",
+        now=expires_at,
+        lease_seconds=300,
+        limit=10,
+    )
+    sql_repository.complete_storage_cleanup(
+        job.job_id,
+        owner="cleanup-1",
+        completed_at=expires_at,
+    )
+
+    assert len(claims) == 1
+    cleaned = sql_repository.get(job.job_id)
+    assert cleaned is not None
+    assert cleaned.result_reference is None
+    assert cleaned.storage_deleted_at == expires_at
+    assert cleaned.version == job.version + 2
+
+
 def test_sql_repository_rejects_duplicate_identifier(
     sql_repository: SqlJobRepository,
 ) -> None:

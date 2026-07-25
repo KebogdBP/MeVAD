@@ -55,6 +55,20 @@ class WorkspaceManager:
         if workspace.intermediate.exists():
             shutil.rmtree(workspace.intermediate)
 
+    def cleanup_job(self, job_id: str) -> None:
+        """Remove one complete job workspace without following symlinks."""
+
+        if _SAFE_JOB_ID.fullmatch(job_id) is None:
+            raise MediaProcessingError("Job identifier is not safe for filesystem storage.")
+        root = self._storage_root / job_id
+        if root.is_symlink():
+            raise MediaProcessingError("Job workspace must not be a symbolic link.")
+        self._ensure_contained(root.resolve())
+        if not root.exists():
+            return
+        self._ensure_directory(root)
+        shutil.rmtree(root)
+
     def _ensure_contained(self, path: Path) -> None:
         if path == self._storage_root or not path.is_relative_to(self._storage_root):
             raise MediaProcessingError("Job workspace path escapes the storage root.")
