@@ -97,7 +97,11 @@ def create_runtime(settings: Settings | None = None) -> WorkerRuntime:
     return WorkerRuntime(
         queue,
         service,
-        create_default_executor(service, storage_root=selected.storage_root),
+        create_default_executor(
+            service,
+            storage_root=selected.storage_root,
+            media_timeout_seconds=selected.worker_media_timeout_seconds,
+        ),
         poll_timeout_seconds=selected.worker_poll_timeout_seconds,
     )
 

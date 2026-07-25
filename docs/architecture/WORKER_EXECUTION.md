@@ -124,9 +124,9 @@ error_message: The media job exceeded its processing deadline.
 ```
 
 `run_process` использует `Popen(start_new_session=True)`, polling cancellation и
-завершение process group через TERM→KILL. Встроенные yt-dlp adapters пока
-остаются Python API calls с socket timeout и hook-based cancellation; hard
-overall timeout для них потребует отдельного subprocess adapter.
+завершение process group через TERM→KILL. Worker video/audio adapters также
+запускают yt-dlp отдельной командой; embedded Python API остаётся только в
+локальных CLI/analyzer границах.
 
 ## Текущая граница
 

@@ -28,6 +28,7 @@
 - Redis queue с claim/ack и восстановлением in-flight задач.
 - bounded retries и Redis dead-letter queue.
 - managed FFmpeg subprocess cancellation и hard timeouts.
+- изолированный yt-dlp worker subprocess для video/audio jobs.
 - отдельный worker process и локальный Docker Compose stack.
 
 Web-интерфейс ещё не реализован.
@@ -198,6 +199,7 @@ pytest --cov=mevad --cov=mevad_api --cov=mevad_worker --cov-report=term-missing
 - [Job System Architecture](docs/architecture/JOB_SYSTEM.md)
 - [Worker Execution Architecture](docs/architecture/WORKER_EXECUTION.md)
 - [Durable Job Infrastructure](docs/architecture/DURABLE_JOB_INFRASTRUCTURE.md)
+- [Managed yt-dlp Worker](docs/architecture/MANAGED_YT_DLP_WORKER.md)
 
 ## Планируемая архитектура
 

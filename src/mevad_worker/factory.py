@@ -5,8 +5,8 @@ from pathlib import Path
 from mevad.adapters import (
     FFmpegLoopMaker,
     FFmpegVideoCutter,
-    YtDlpAudioExtractor,
-    YtDlpVideoDownloader,
+    YtDlpCommandAudioExtractor,
+    YtDlpCommandVideoDownloader,
 )
 from mevad.jobs import JobService
 from mevad_worker.executor import JobExecutor, WorkerDependencies
@@ -17,14 +17,15 @@ def create_default_executor(
     service: JobService,
     *,
     storage_root: Path = Path("storage/jobs"),
+    media_timeout_seconds: float = 7200,
 ) -> JobExecutor:
     """Compose the production-intent worker adapters."""
 
     return JobExecutor(
         service=service,
         dependencies=WorkerDependencies(
-            video_downloader=YtDlpVideoDownloader(),
-            audio_extractor=YtDlpAudioExtractor(),
+            video_downloader=YtDlpCommandVideoDownloader(timeout_seconds=media_timeout_seconds),
+            audio_extractor=YtDlpCommandAudioExtractor(timeout_seconds=media_timeout_seconds),
             video_cutter=FFmpegVideoCutter(),
             loop_maker=FFmpegLoopMaker(),
         ),

@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     redis_queue_name: str = "mevad:jobs"
     auto_create_schema: bool = False
     worker_poll_timeout_seconds: int = Field(default=5, ge=1, le=60)
+    worker_media_timeout_seconds: int = Field(default=7200, ge=60, le=86400)
     job_max_attempts: int = Field(default=3, ge=1, le=10)
     storage_root: Path = Path("storage/jobs")
 
