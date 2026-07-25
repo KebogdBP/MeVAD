@@ -20,8 +20,9 @@
 - single-video downloader с пресетами качества, контейнерами и progress events.
 - Audio Extractor для MP3, M4A, Opus и WAV.
 - Video Cutter с быстрым и точным режимами.
+- GIF & Loop Maker для GIF, WebP, MP4 и WebM.
 
-GIF Maker и web API ещё не реализованы.
+Web API и фоновая job system ещё не реализованы.
 
 ## Требования
 
@@ -100,6 +101,23 @@ mevad cut-video input.mp4 \
 `fast` использует stream copy и может начать фрагмент с ближайшего keyframe.
 `accurate` перекодирует видео в H.264/AAC для более точных границ.
 
+Создание GIF или loop-ready video:
+
+```bash
+mevad make-loop input.mp4 \
+  --start 2 \
+  --end 7 \
+  --format gif \
+  --width 640 \
+  --fps 15 \
+  --quality balanced \
+  --speed 1 \
+  --output downloads
+```
+
+Форматы: `gif`, `webp`, `mp4`, `webm`. Quality presets: `small`, `balanced`,
+`high`. Скорость: `0.5`, `1`, `1.5`, `2`.
+
 ## Проверки
 
 ```bash
@@ -118,6 +136,7 @@ pytest --cov=mevad --cov-report=term-missing
 - [Video Downloader Architecture](docs/architecture/VIDEO_DOWNLOADER.md)
 - [Audio Extractor Architecture](docs/architecture/AUDIO_EXTRACTOR.md)
 - [Video Cutter Architecture](docs/architecture/VIDEO_CUTTER.md)
+- [GIF and Loop Maker Architecture](docs/architecture/GIF_LOOP_MAKER.md)
 
 ## Планируемая архитектура
 

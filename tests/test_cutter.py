@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from mevad.adapters.ffmpeg_cutter import FFmpegVideoCutter, ProcessResult
+from mevad.adapters.ffmpeg_cutter import FFmpegVideoCutter
+from mevad.adapters.process import ProcessResult
 from mevad.exceptions import (
     DownloadCancelledError,
     InvalidClipIntervalError,

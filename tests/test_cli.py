@@ -15,6 +15,9 @@ from mevad.models import (
     CutMode,
     DownloadProgress,
     DownloadStatus,
+    LoopFormat,
+    LoopRenderRequest,
+    LoopRenderResult,
     MediaAnalysis,
     MediaSource,
     SourceKind,
@@ -286,3 +289,84 @@ def test_cut_command_reports_invalid_interval(
 
     assert exit_code == 2
     assert "cut error: Clip end must be greater" in capsys.readouterr().out
+
+
+def test_loop_command_prints_progress_and_result(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "input.mp4"
+
+    class FakeLoopMaker:
+        def render(
+            self,
+            request: LoopRenderRequest,
+            *,
+            on_progress: Any = None,
+        ) -> LoopRenderResult:
+            assert request.input_path == input_path
+            assert request.output_format is LoopFormat.WEBP
+            assert request.width == 480
+            assert request.fps == 20
+            assert not request.repeat
+            on_progress(DownloadProgress(status=DownloadStatus.PROCESSING))
+            return LoopRenderResult(
+                output_path=tmp_path / "loop.webp",
+                output_format=LoopFormat.WEBP,
+                duration_seconds=2,
+                width=480,
+                fps=20,
+                filesize_bytes=50,
+            )
+
+    monkeypatch.setattr(mevad.cli, "FFmpegLoopMaker", FakeLoopMaker)
+
+    exit_code = main(
+        [
+            "make-loop",
+            str(input_path),
+            "--start",
+            "1",
+            "--end",
+            "3",
+            "--output",
+            str(tmp_path),
+            "--format",
+            "webp",
+            "--width",
+            "480",
+            "--fps",
+            "20",
+            "--quality",
+            "high",
+            "--speed",
+            "1.5",
+            "--no-repeat",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "processing" in output
+    assert '"format": "webp"' in output
+
+
+def test_loop_command_reports_invalid_limits(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = main(
+        [
+            "make-loop",
+            "input.mp4",
+            "--start",
+            "0",
+            "--end",
+            "31",
+            "--format",
+            "gif",
+        ]
+    )
+
+    assert exit_code == 2
+    assert "loop error: GIF and WebP source duration" in capsys.readouterr().out

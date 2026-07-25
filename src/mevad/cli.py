@@ -8,6 +8,7 @@ from pathlib import Path
 
 from mevad import __version__
 from mevad.adapters import (
+    FFmpegLoopMaker,
     FFmpegVideoCutter,
     YtDlpAnalyzer,
     YtDlpAudioExtractor,
@@ -28,7 +29,11 @@ from mevad.models import (
     ClipInterval,
     CutMode,
     DownloadProgress,
+    LoopFormat,
+    LoopQuality,
+    LoopRenderRequest,
     MediaSource,
+    PlaybackSpeed,
     SourceKind,
     VideoContainer,
     VideoCutRequest,
@@ -123,6 +128,44 @@ def build_parser() -> argparse.ArgumentParser:
         "--mode",
         choices=[mode.value for mode in CutMode],
         default=CutMode.ACCURATE.value,
+    )
+
+    loop = commands.add_parser(
+        "make-loop",
+        help="Create a GIF, WebP, MP4, or WebM loop from a local video.",
+    )
+    loop.add_argument("input", type=Path)
+    loop.add_argument("--start", type=float, required=True, help="Start time in seconds.")
+    loop.add_argument("--end", type=float, required=True, help="End time in seconds.")
+    loop.add_argument(
+        "--output",
+        type=Path,
+        default=Path("downloads"),
+        help="Output directory (default: downloads).",
+    )
+    loop.add_argument(
+        "--format",
+        choices=[output_format.value for output_format in LoopFormat],
+        default=LoopFormat.GIF.value,
+        dest="output_format",
+    )
+    loop.add_argument("--width", type=int, default=640)
+    loop.add_argument("--fps", type=int, default=15)
+    loop.add_argument(
+        "--quality",
+        choices=[quality.value for quality in LoopQuality],
+        default=LoopQuality.BALANCED.value,
+    )
+    loop.add_argument(
+        "--speed",
+        choices=[speed.value for speed in PlaybackSpeed],
+        default=PlaybackSpeed.NORMAL.value,
+    )
+    loop.add_argument(
+        "--no-repeat",
+        action="store_false",
+        dest="repeat",
+        help="Disable embedded repetition for GIF/WebP.",
     )
     return parser
 
@@ -253,6 +296,52 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "duration_seconds": cut_result.duration_seconds,
                     "filesize_bytes": cut_result.filesize_bytes,
                     "mode": cut_result.mode.value,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+
+    if args.command == "make-loop":
+        try:
+            loop_request = LoopRenderRequest(
+                input_path=args.input,
+                output_directory=args.output,
+                interval=ClipInterval(
+                    start_seconds=args.start,
+                    end_seconds=args.end,
+                ),
+                output_format=LoopFormat(args.output_format),
+                width=args.width,
+                fps=args.fps,
+                quality=LoopQuality(args.quality),
+                speed=PlaybackSpeed(args.speed),
+                repeat=args.repeat,
+            )
+            loop_result = FFmpegLoopMaker().render(
+                loop_request,
+                on_progress=_print_download_progress,
+            )
+        except (
+            InvalidClipIntervalError,
+            MediaProcessingError,
+            MissingRuntimeToolError,
+        ) as error:
+            print(f"loop error: {error}")
+            return 2
+        except KeyboardInterrupt:
+            print("loop rendering cancelled")
+            return 130
+        print(
+            json.dumps(
+                {
+                    "output_path": str(loop_result.output_path),
+                    "format": loop_result.output_format.value,
+                    "duration_seconds": loop_result.duration_seconds,
+                    "width": loop_result.width,
+                    "fps": loop_result.fps,
+                    "filesize_bytes": loop_result.filesize_bytes,
                 },
                 ensure_ascii=False,
                 indent=2,
