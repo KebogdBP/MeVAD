@@ -27,3 +27,11 @@ class MediaDownloadError(MeVADError):
 
 class DownloadCancelledError(MediaDownloadError):
     """Raised when a download is cancelled by its caller."""
+
+
+class MediaProcessingError(MeVADError):
+    """Raised when local media processing cannot be completed."""
+
+
+class InvalidClipIntervalError(MediaProcessingError, ValueError):
+    """Raised when a requested clip interval is invalid."""

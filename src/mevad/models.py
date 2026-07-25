@@ -2,7 +2,10 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
+from math import isfinite
 from pathlib import Path
+
+from mevad.exceptions import InvalidClipIntervalError
 
 
 class SourceKind(StrEnum):
@@ -166,3 +169,50 @@ class AudioExtractionResult:
     codec: AudioCodec
     output_path: Path
     filesize_bytes: int
+
+
+class CutMode(StrEnum):
+    """Video cutting accuracy and performance modes."""
+
+    FAST = "fast"
+    ACCURATE = "accurate"
+
+
+@dataclass(frozen=True, slots=True)
+class ClipInterval:
+    """Validated half-open media interval in seconds."""
+
+    start_seconds: float
+    end_seconds: float
+
+    def __post_init__(self) -> None:
+        if not isfinite(self.start_seconds) or not isfinite(self.end_seconds):
+            raise InvalidClipIntervalError("Clip timestamps must be finite.")
+        if self.start_seconds < 0:
+            raise InvalidClipIntervalError("Clip start must not be negative.")
+        if self.end_seconds <= self.start_seconds:
+            raise InvalidClipIntervalError("Clip end must be greater than clip start.")
+
+    @property
+    def duration_seconds(self) -> float:
+        return self.end_seconds - self.start_seconds
+
+
+@dataclass(frozen=True, slots=True)
+class VideoCutRequest:
+    """Parameters required to cut a local video file."""
+
+    input_path: Path
+    output_directory: Path
+    interval: ClipInterval
+    mode: CutMode = CutMode.ACCURATE
+
+
+@dataclass(frozen=True, slots=True)
+class VideoCutResult:
+    """Completed local video cut."""
+
+    output_path: Path
+    duration_seconds: float
+    filesize_bytes: int
+    mode: CutMode

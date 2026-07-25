@@ -7,16 +7,31 @@ from dataclasses import asdict
 from pathlib import Path
 
 from mevad import __version__
-from mevad.adapters import YtDlpAnalyzer, YtDlpAudioExtractor, YtDlpVideoDownloader
-from mevad.exceptions import InvalidSourceURLError, MediaAnalysisError, MediaDownloadError
+from mevad.adapters import (
+    FFmpegVideoCutter,
+    YtDlpAnalyzer,
+    YtDlpAudioExtractor,
+    YtDlpVideoDownloader,
+)
+from mevad.exceptions import (
+    InvalidClipIntervalError,
+    InvalidSourceURLError,
+    MediaAnalysisError,
+    MediaDownloadError,
+    MediaProcessingError,
+    MissingRuntimeToolError,
+)
 from mevad.models import (
     AudioBitrate,
     AudioCodec,
     AudioExtractionRequest,
+    ClipInterval,
+    CutMode,
     DownloadProgress,
     MediaSource,
     SourceKind,
     VideoContainer,
+    VideoCutRequest,
     VideoDownloadRequest,
     VideoQuality,
 )
@@ -89,6 +104,25 @@ def build_parser() -> argparse.ArgumentParser:
         choices=[bitrate.value for bitrate in AudioBitrate],
         default=AudioBitrate.K192.value,
         help="Compressed output bitrate in kbps; ignored for WAV.",
+    )
+
+    cutter = commands.add_parser(
+        "cut-video",
+        help="Cut a clip from a local video file.",
+    )
+    cutter.add_argument("input", type=Path)
+    cutter.add_argument("--start", type=float, required=True, help="Start time in seconds.")
+    cutter.add_argument("--end", type=float, required=True, help="End time in seconds.")
+    cutter.add_argument(
+        "--output",
+        type=Path,
+        default=Path("downloads"),
+        help="Output directory (default: downloads).",
+    )
+    cutter.add_argument(
+        "--mode",
+        choices=[mode.value for mode in CutMode],
+        default=CutMode.ACCURATE.value,
     )
     return parser
 
@@ -180,6 +214,45 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "codec": audio_result.codec.value,
                     "output_path": str(audio_result.output_path),
                     "filesize_bytes": audio_result.filesize_bytes,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+
+    if args.command == "cut-video":
+        try:
+            cut_request = VideoCutRequest(
+                input_path=args.input,
+                output_directory=args.output,
+                interval=ClipInterval(
+                    start_seconds=args.start,
+                    end_seconds=args.end,
+                ),
+                mode=CutMode(args.mode),
+            )
+            cut_result = FFmpegVideoCutter().cut(
+                cut_request,
+                on_progress=_print_download_progress,
+            )
+        except (
+            InvalidClipIntervalError,
+            MediaProcessingError,
+            MissingRuntimeToolError,
+        ) as error:
+            print(f"cut error: {error}")
+            return 2
+        except KeyboardInterrupt:
+            print("video cutting cancelled")
+            return 130
+        print(
+            json.dumps(
+                {
+                    "output_path": str(cut_result.output_path),
+                    "duration_seconds": cut_result.duration_seconds,
+                    "filesize_bytes": cut_result.filesize_bytes,
+                    "mode": cut_result.mode.value,
                 },
                 ensure_ascii=False,
                 indent=2,

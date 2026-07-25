@@ -19,8 +19,9 @@
 - нормализованные форматы, субтитры, playlist metadata и доступные действия.
 - single-video downloader с пресетами качества, контейнерами и progress events.
 - Audio Extractor для MP3, M4A, Opus и WAV.
+- Video Cutter с быстрым и точным режимами.
 
-Обрезка, GIF и web API ещё не реализованы.
+GIF Maker и web API ещё не реализованы.
 
 ## Требования
 
@@ -86,6 +87,19 @@ mevad extract-audio "https://example.com/video" \
 Доступные кодеки: `mp3`, `m4a`, `opus`, `wav`. Bitrate-пресеты для сжатых
 форматов: `128`, `192`, `256`, `320` kbps. Для WAV bitrate игнорируется.
 
+Обрезка локального видео:
+
+```bash
+mevad cut-video input.mp4 \
+  --start 10.5 \
+  --end 25 \
+  --mode accurate \
+  --output downloads
+```
+
+`fast` использует stream copy и может начать фрагмент с ближайшего keyframe.
+`accurate` перекодирует видео в H.264/AAC для более точных границ.
+
 ## Проверки
 
 ```bash
@@ -103,6 +117,7 @@ pytest --cov=mevad --cov-report=term-missing
 - [Smart URL Analyzer Architecture](docs/architecture/SMART_URL_ANALYZER.md)
 - [Video Downloader Architecture](docs/architecture/VIDEO_DOWNLOADER.md)
 - [Audio Extractor Architecture](docs/architecture/AUDIO_EXTRACTOR.md)
+- [Video Cutter Architecture](docs/architecture/VIDEO_CUTTER.md)
 
 ## Планируемая архитектура
 

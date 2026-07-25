@@ -11,11 +11,15 @@ from mevad.models import (
     AudioCodec,
     AudioExtractionRequest,
     AudioExtractionResult,
+    ClipInterval,
+    CutMode,
     DownloadProgress,
     DownloadStatus,
     MediaAnalysis,
     MediaSource,
     SourceKind,
+    VideoCutRequest,
+    VideoCutResult,
     VideoDownloadRequest,
     VideoDownloadResult,
 )
@@ -215,3 +219,70 @@ def test_audio_command_reports_domain_error(
 
     assert exit_code == 2
     assert "audio error: failed to extract" in capsys.readouterr().out
+
+
+def test_cut_command_prints_progress_and_result(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "input.mp4"
+
+    class FakeCutter:
+        def cut(
+            self,
+            request: VideoCutRequest,
+            *,
+            on_progress: Any = None,
+        ) -> VideoCutResult:
+            assert request.input_path == input_path
+            assert request.interval == ClipInterval(1.0, 2.5)
+            assert request.mode is CutMode.FAST
+            on_progress(DownloadProgress(status=DownloadStatus.PROCESSING))
+            return VideoCutResult(
+                output_path=tmp_path / "clip.mp4",
+                duration_seconds=1.5,
+                filesize_bytes=25,
+                mode=CutMode.FAST,
+            )
+
+    monkeypatch.setattr(mevad.cli, "FFmpegVideoCutter", FakeCutter)
+
+    exit_code = main(
+        [
+            "cut-video",
+            str(input_path),
+            "--start",
+            "1",
+            "--end",
+            "2.5",
+            "--output",
+            str(tmp_path),
+            "--mode",
+            "fast",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "processing" in output
+    assert '"duration_seconds": 1.5' in output
+    assert '"mode": "fast"' in output
+
+
+def test_cut_command_reports_invalid_interval(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = main(
+        [
+            "cut-video",
+            "input.mp4",
+            "--start",
+            "2",
+            "--end",
+            "1",
+        ]
+    )
+
+    assert exit_code == 2
+    assert "cut error: Clip end must be greater" in capsys.readouterr().out
