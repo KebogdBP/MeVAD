@@ -1,0 +1,36 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.cookies
+cookies.txt
+
+# Editors
+.idea/
+.vscode/
+
+# Logs and temporary files
+*.log
+tmp/
+temp/
+
+# Downloaded and generated media
+downloads/
+storage/temporary/
+storage/completed/
+storage/thumbnails/
+*.part
+*.ytdl
+
