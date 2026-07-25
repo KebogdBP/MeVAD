@@ -11,3 +11,11 @@ class InvalidSourceURLError(MeVADError, ValueError):
 
 class MissingRuntimeToolError(MeVADError):
     """Raised when a required external runtime tool is unavailable."""
+
+
+class MediaAnalysisError(MeVADError):
+    """Raised when media metadata cannot be analyzed."""
+
+
+class UnsupportedMediaError(MediaAnalysisError):
+    """Raised when extracted metadata does not describe supported media."""

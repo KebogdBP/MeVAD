@@ -1,10 +1,14 @@
 """Command-line adapter for the MeVAD core."""
 
 import argparse
+import json
 from collections.abc import Sequence
+from dataclasses import asdict
 
 from mevad import __version__
-from mevad.exceptions import InvalidSourceURLError
+from mevad.adapters import YtDlpAnalyzer
+from mevad.exceptions import InvalidSourceURLError, MediaAnalysisError
+from mevad.models import MediaSource, SourceKind
 from mevad.runtime import discover_runtime_tools
 from mevad.security import normalize_remote_url
 
@@ -24,6 +28,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Validate a remote media URL without accessing the network.",
     )
     validate.add_argument("url")
+
+    analyze = commands.add_parser(
+        "analyze",
+        help="Analyze remote media metadata through yt-dlp.",
+    )
+    analyze.add_argument("url")
     return parser
 
 
@@ -43,6 +53,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"invalid URL: {error}")
             return 2
         print(normalized_url)
+        return 0
+
+    if args.command == "analyze":
+        try:
+            analysis = YtDlpAnalyzer().analyze(
+                MediaSource(kind=SourceKind.REMOTE_URL, value=args.url)
+            )
+        except (InvalidSourceURLError, MediaAnalysisError) as error:
+            print(f"analysis error: {error}")
+            return 2
+        print(json.dumps(asdict(analysis), ensure_ascii=False, indent=2))
         return 0
 
     build_parser().error("unknown command")

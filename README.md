@@ -15,6 +15,8 @@
 - базовая защита от localhost и прямых private/reserved IP;
 - обнаружение FFmpeg и FFprobe;
 - CLI, тесты и автоматические quality gates.
+- Smart URL Analyzer через изолированный `yt-dlp` adapter;
+- нормализованные форматы, субтитры, playlist metadata и доступные действия.
 
 Скачивание медиа ещё не реализовано.
 
@@ -46,6 +48,17 @@ mevad validate-url "https://example.com/video"
 Команда не обращается к сети. DNS и каждый redirect target будут повторно
 проверяться в будущем сетевом adapter перед соединением.
 
+Анализ метаданных через `yt-dlp`:
+
+```bash
+mevad analyze "https://example.com/video"
+```
+
+Эта команда обращается к внешнему URL, но не скачивает медиапоток. На текущем
+этапе она предназначена для локального CLI. Её нельзя напрямую публиковать как
+web endpoint до добавления сетевой изоляции и проверки всех DNS/redirect
+назначений.
+
 ## Проверки
 
 ```bash
@@ -60,6 +73,7 @@ pytest --cov=mevad --cov-report=term-missing
 - [Project Vision](MEGADOWNLOADER_PROJECT_VISION.md)
 - [Phase 0 — Repository Audit and Cleanup](docs/product/PHASE_0_REPOSITORY_AUDIT_AND_CLEANUP.md)
 - [Initial Repository Audit](docs/audits/INITIAL_REPOSITORY_AUDIT.md)
+- [Smart URL Analyzer Architecture](docs/architecture/SMART_URL_ANALYZER.md)
 
 ## Планируемая архитектура
 

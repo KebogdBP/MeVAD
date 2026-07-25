@@ -9,7 +9,9 @@ description = "Media analysis and processing core for MegaDownloader Video & Aud
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "KebogdBP" }]
-dependencies = []
+dependencies = [
+  "yt-dlp[default]==2026.6.9",
+]
 
 [project.optional-dependencies]
 dev = [
