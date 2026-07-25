@@ -16,8 +16,9 @@ queued job
 future worker
 ```
 
-Текущий инкремент реализует domain, repository contract и HTTP lifecycle, но не
-запускает media work.
+Domain, repository contract и HTTP lifecycle дополнены отдельным
+`JobExecutor`. Process-local API repository пока не связан с отдельным worker
+process: для этой границы нужны PostgreSQL/Redis adapters.
 
 ## Операции
 

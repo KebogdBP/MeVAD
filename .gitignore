@@ -37,5 +37,6 @@ downloads/
 storage/temporary/
 storage/completed/
 storage/thumbnails/
+storage/jobs/
 *.part
 *.ytdl

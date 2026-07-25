@@ -38,7 +38,7 @@ jobs:
         run: mypy
 
       - name: Tests
-        run: pytest --cov=mevad --cov=mevad_api --cov-report=term-missing
+        run: pytest --cov=mevad --cov=mevad_api --cov=mevad_worker --cov-report=term-missing
 
       - name: CLI smoke test
         run: mevad --version

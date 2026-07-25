@@ -23,8 +23,9 @@
 - GIF & Loop Maker для GIF, WebP, MP4 и WebM.
 - FastAPI foundation с health/readiness и versioned API.
 - Job System с типизированными задачами, status polling и отменой.
+- Worker execution layer с dispatch, progress bridge и per-job storage.
 
-Реальный background worker и web-интерфейс ещё не реализованы.
+Durable queue/repository и web-интерфейс ещё не реализованы.
 
 ## Требования
 
@@ -154,7 +155,9 @@ POST /api/v1/jobs/{job_id}/cancel
 ```
 
 Сейчас задачи сохраняются в process-local memory и не выполняются. Этот backend
-предназначен только для разработки и тестирования будущего worker contract.
+предназначен только для разработки и тестирования worker contract. Сам
+`JobExecutor` уже выполняет четыре операции, но API и отдельный worker process
+будут связаны только после подключения PostgreSQL/Redis.
 
 ## Проверки
 
@@ -162,7 +165,7 @@ POST /api/v1/jobs/{job_id}/cancel
 ruff check .
 ruff format --check .
 mypy
-pytest --cov=mevad --cov=mevad_api --cov-report=term-missing
+pytest --cov=mevad --cov=mevad_api --cov=mevad_worker --cov-report=term-missing
 ```
 
 ## Документы
@@ -177,6 +180,7 @@ pytest --cov=mevad --cov=mevad_api --cov-report=term-missing
 - [GIF and Loop Maker Architecture](docs/architecture/GIF_LOOP_MAKER.md)
 - [API Foundation Architecture](docs/architecture/API_FOUNDATION.md)
 - [Job System Architecture](docs/architecture/JOB_SYSTEM.md)
+- [Worker Execution Architecture](docs/architecture/WORKER_EXECUTION.md)
 
 ## Планируемая архитектура
 
