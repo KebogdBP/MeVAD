@@ -1,6 +1,6 @@
 """SQLAlchemy-backed durable job repository."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 from typing import Any
 
@@ -9,6 +9,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     Engine,
+    ForeignKey,
     Integer,
     MetaData,
     String,
@@ -16,6 +17,7 @@ from sqlalchemy import (
     Text,
     create_engine,
     insert,
+    or_,
     select,
     update,
 )
@@ -23,6 +25,7 @@ from sqlalchemy.exc import IntegrityError
 
 from mevad.exceptions import ConcurrentJobUpdateError
 from mevad.jobs.models import Job, JobOperation, JobStatus
+from mevad.jobs.outbox import OutboxEvent
 
 metadata = MetaData()
 
@@ -46,6 +49,19 @@ jobs_table = Table(
     Column("result_reference", Text),
     Column("error_code", String(64)),
     Column("error_message", Text),
+)
+
+job_outbox_table = Table(
+    "job_outbox",
+    metadata,
+    Column("event_id", String(64), primary_key=True),
+    Column("job_id", String(64), ForeignKey("jobs.job_id"), nullable=False, unique=True),
+    Column("created_at", DateTime(timezone=True), nullable=False, index=True),
+    Column("published_at", DateTime(timezone=True)),
+    Column("attempt_count", Integer, nullable=False, default=0),
+    Column("lease_owner", String(128)),
+    Column("lease_expires_at", DateTime(timezone=True), index=True),
+    Column("last_error", Text),
 )
 
 
@@ -75,6 +91,25 @@ class SqlJobRepository:
                 connection.execute(insert(jobs_table).values(**_to_record(job)))
         except IntegrityError as error:
             raise ConcurrentJobUpdateError("Job identifier already exists.") from error
+
+    def add_with_outbox(self, job: Job, event: OutboxEvent) -> None:
+        """Insert job and publication intent in one database transaction."""
+
+        if event.job_id != job.job_id:
+            raise ValueError("Outbox event must reference the inserted job.")
+        try:
+            with self._engine.begin() as connection:
+                connection.execute(insert(jobs_table).values(**_to_record(job)))
+                connection.execute(
+                    insert(job_outbox_table).values(
+                        event_id=event.event_id,
+                        job_id=event.job_id,
+                        created_at=event.created_at,
+                        attempt_count=0,
+                    )
+                )
+        except IntegrityError as error:
+            raise ConcurrentJobUpdateError("Job or outbox event already exists.") from error
 
     def get(self, job_id: str) -> Job | None:
         with self._engine.connect() as connection:
@@ -121,6 +156,110 @@ class SqlJobRepository:
                 .all()
             )
         return tuple(_from_record(dict(row)) for row in rows)
+
+    def claim_outbox(
+        self,
+        *,
+        owner: str,
+        now: datetime,
+        lease_seconds: int,
+        limit: int,
+    ) -> tuple[OutboxEvent, ...]:
+        if not owner or len(owner) > 128:
+            raise ValueError("Outbox owner must be between 1 and 128 characters.")
+        if not 5 <= lease_seconds <= 3600:
+            raise ValueError("Outbox lease must be between 5 and 3600 seconds.")
+        if not 1 <= limit <= 1000:
+            raise ValueError("Outbox batch size must be between 1 and 1000.")
+        lease_expires_at = now + timedelta(seconds=lease_seconds)
+        claimed: list[OutboxEvent] = []
+        available = or_(
+            job_outbox_table.c.lease_expires_at.is_(None),
+            job_outbox_table.c.lease_expires_at <= now,
+        )
+        with self._engine.begin() as connection:
+            rows = (
+                connection.execute(
+                    select(job_outbox_table)
+                    .where(
+                        job_outbox_table.c.published_at.is_(None),
+                        available,
+                    )
+                    .order_by(job_outbox_table.c.created_at)
+                    .limit(limit)
+                )
+                .mappings()
+                .all()
+            )
+            for row in rows:
+                result = connection.execute(
+                    update(job_outbox_table)
+                    .where(
+                        job_outbox_table.c.event_id == row["event_id"],
+                        job_outbox_table.c.published_at.is_(None),
+                        available,
+                    )
+                    .values(
+                        lease_owner=owner,
+                        lease_expires_at=lease_expires_at,
+                        attempt_count=job_outbox_table.c.attempt_count + 1,
+                    )
+                )
+                if result.rowcount == 1:
+                    claimed.append(
+                        OutboxEvent(
+                            event_id=str(row["event_id"]),
+                            job_id=str(row["job_id"]),
+                            created_at=_as_utc(row["created_at"]),
+                            attempt_count=int(row["attempt_count"]) + 1,
+                            lease_owner=owner,
+                            lease_expires_at=lease_expires_at,
+                        )
+                    )
+        return tuple(claimed)
+
+    def mark_outbox_published(
+        self,
+        event_id: str,
+        *,
+        owner: str,
+        published_at: datetime,
+    ) -> None:
+        with self._engine.begin() as connection:
+            result = connection.execute(
+                update(job_outbox_table)
+                .where(
+                    job_outbox_table.c.event_id == event_id,
+                    job_outbox_table.c.lease_owner == owner,
+                    job_outbox_table.c.published_at.is_(None),
+                )
+                .values(
+                    published_at=published_at,
+                    lease_owner=None,
+                    lease_expires_at=None,
+                    last_error=None,
+                )
+            )
+            if result.rowcount != 1:
+                raise ConcurrentJobUpdateError("Outbox lease is no longer owned.")
+
+    def release_outbox(self, event_id: str, *, owner: str, error_message: str) -> None:
+        with self._engine.begin() as connection:
+            result = connection.execute(
+                update(job_outbox_table)
+                .where(
+                    job_outbox_table.c.event_id == event_id,
+                    job_outbox_table.c.lease_owner == owner,
+                    job_outbox_table.c.published_at.is_(None),
+                )
+                .values(
+                    lease_owner=None,
+                    lease_expires_at=None,
+                    last_error=error_message[:500],
+                )
+            )
+            if result.rowcount != 1:
+                raise ConcurrentJobUpdateError("Outbox lease is no longer owned.")
 
 
 def _to_record(job: Job) -> dict[str, Any]:

@@ -34,6 +34,7 @@
 - unique Redis delivery receipts и stale-ack fencing.
 - timestamped Redis claim reaper для crash window до SQL lease.
 - delayed exponential retries и transient/permanent error classification.
+- transactional PostgreSQL outbox для initial Redis dispatch.
 - отдельный worker process и локальный Docker Compose stack.
 
 Web-интерфейс ещё не реализован.
@@ -181,10 +182,12 @@ state, Redis переносит job identifiers, а API и worker использ
 Transient failure ждёт неблокирующий exponential backoff между
 `MEVAD_WORKER_RETRY_BASE_SECONDS` и `MEVAD_WORKER_RETRY_MAX_SECONDS`;
 permanent failure сразу переносится в dead-letter.
+Initial queue publication выполняет отдельный `mevad-outbox` relay: Redis
+outage не теряет job и не заставляет API откатывать уже созданный intent.
 
 Для ручного запуска задайте `MEVAD_JOB_BACKEND=postgres`,
 `MEVAD_QUEUE_BACKEND=redis`, database/Redis URLs, затем запустите
-`uvicorn mevad_api.app:app` и `mevad-worker` отдельно.
+`uvicorn mevad_api.app:app`, `mevad-outbox` и `mevad-worker` отдельно.
 
 ## Проверки
 

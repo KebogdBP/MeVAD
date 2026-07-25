@@ -16,6 +16,7 @@ services:
       - ./migrations/0002_add_job_attempts.sql:/docker-entrypoint-initdb.d/0002_add_job_attempts.sql:ro
       - ./migrations/0003_add_job_leases.sql:/docker-entrypoint-initdb.d/0003_add_job_leases.sql:ro
       - ./migrations/0004_add_claim_receipts.sql:/docker-entrypoint-initdb.d/0004_add_claim_receipts.sql:ro
+      - ./migrations/0005_create_job_outbox.sql:/docker-entrypoint-initdb.d/0005_create_job_outbox.sql:ro
 
   redis:
     image: redis:8-alpine
@@ -59,6 +60,16 @@ services:
         condition: service_healthy
     volumes:
       - job-storage:/app/storage/jobs
+
+  outbox:
+    build: .
+    command: ["mevad-outbox"]
+    environment: *mevad-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   job-storage:

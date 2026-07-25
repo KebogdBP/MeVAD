@@ -6,8 +6,14 @@
 POST /api/v1/jobs
         ↓
 JobService
-   ├── INSERT jobs (PostgreSQL)
-   └── LPUSH ready (Redis)
+        ↓
+PostgreSQL transaction
+   ├── INSERT jobs
+   └── INSERT job_outbox
+                ↓
+           Outbox relay
+                ↓
+          LPUSH ready (Redis)
                     ↓
               BRPOPLPUSH
                     ↓
@@ -120,12 +126,17 @@ sorted set и promotion наступивших deliveries выполняются
 - `MEVAD_WORKER_RETRY_BASE_SECONDS` — первая задержка, default 5;
 - `MEVAD_WORKER_RETRY_MAX_SECONDS` — потолок, default 300.
 
-## Ошибка публикации
+## Transactional submission outbox
 
-Сначала создаётся durable job, затем публикуется queue message. Если Redis
-недоступен, job переводится в `failed`, сохраняется `job_enqueue_failed`, а API
-отвечает `503 job_queue_unavailable`. Полностью атомарная гарантия между
-PostgreSQL и Redis потребует transactional outbox.
+Production API одной PostgreSQL transaction вставляет job и `job_outbox`
+event. Отдельный `mevad-outbox` process арендует pending events, публикует
+`job_id` в Redis и отмечает `published_at`. Redis outage больше не превращает
+новую job в terminal failure: intent остаётся durable и будет опубликован
+после восстановления.
+
+Relay lease переживает process crash. Crash после Redis enqueue, но до
+`published_at`, может создать duplicate delivery; lifecycle fencing worker
+безопасно его удаляет. Это at-least-once dispatch.
 
 ## Worker runtime
 
@@ -139,13 +150,14 @@ PostgreSQL и Redis потребует transactional outbox.
 docker compose up --build
 ```
 
-Compose поднимает PostgreSQL, Redis с AOF, API и worker. API/worker запускаются
-после healthchecks инфраструктуры и используют общий named volume результатов.
+Compose поднимает PostgreSQL, Redis с AOF, API, outbox relay и worker.
+API/worker запускаются после healthchecks инфраструктуры и используют общий
+named volume результатов.
 
 ## Следующие ограничения
 
 - retry jitter;
-- transactional outbox;
+- command outbox для retry/dead-letter broker transitions;
 - migration runner;
 - result TTL/cleanup scheduler;
 - structured metrics and tracing.

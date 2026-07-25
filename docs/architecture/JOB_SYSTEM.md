@@ -119,6 +119,10 @@ ready, когда соответствующая SQL job всё ещё `queued` 
 закрывает crash window между Redis claim и созданием SQL lease, не переигрывая
 активные jobs.
 
+Initial dispatch проходит через transactional PostgreSQL outbox. API commit
+атомарно сохраняет job и publication intent, а leased relay доставляет событие
+в Redis с at-least-once семантикой.
+
 ## HTTP API
 
 ### Создание

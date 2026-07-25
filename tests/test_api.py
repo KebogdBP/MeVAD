@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -286,6 +287,31 @@ def test_job_api_returns_service_unavailable_when_queue_fails() -> None:
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "job_queue_unavailable"
     assert service.get("job-1").status.value == "failed"
+
+
+def test_postgres_job_creation_commits_outbox_without_redis(
+    tmp_path: Path,
+) -> None:
+    settings = _settings(
+        job_backend="postgres",
+        queue_backend="redis",
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'jobs.db'}",
+        redis_url="redis://127.0.0.1:1/0",
+        auto_create_schema=True,
+    )
+
+    with _client(settings=settings) as client:
+        response = client.post(
+            "/api/v1/jobs",
+            json={
+                "operation": "download_video",
+                "source_url": "https://example.com/video",
+                "options": {"quality": "720p", "container": "mp4"},
+            },
+        )
+
+    assert response.status_code == 201
+    assert response.json()["status"] == "queued"
 
 
 def test_job_api_returns_stable_not_found_error() -> None:

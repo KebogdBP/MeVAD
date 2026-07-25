@@ -14,6 +14,8 @@ from mevad.jobs import (
     JobOperation,
     JobService,
     JobStatus,
+    OutboxRelay,
+    SqlJobOutbox,
 )
 from mevad.jobs.redis_queue import RedisJobQueue
 from mevad.jobs.sql_repository import SqlJobRepository
@@ -351,6 +353,146 @@ def test_service_marks_job_failed_when_publish_fails(
     assert job is not None
     assert job.status is JobStatus.FAILED
     assert job.error_code == "job_enqueue_failed"
+
+
+def test_sql_outbox_persists_job_and_event_atomically(
+    sql_repository: SqlJobRepository,
+) -> None:
+    outbox = SqlJobOutbox(sql_repository, event_id_factory=lambda: "event-1")
+    service = JobService(
+        sql_repository,
+        outbox=outbox,
+        job_id_factory=iter(("job-1", "job-2")).__next__,
+    )
+    service.create(
+        operation=JobOperation.DOWNLOAD_VIDEO,
+        source_url="https://example.com/video",
+        parameters={"quality": "720p"},
+    )
+
+    with pytest.raises(ConcurrentJobUpdateError):
+        service.create(
+            operation=JobOperation.DOWNLOAD_VIDEO,
+            source_url="https://example.com/other",
+            parameters={"quality": "720p"},
+        )
+
+    assert sql_repository.get("job-1") is not None
+    assert sql_repository.get("job-2") is None
+
+
+def test_outbox_relay_publishes_and_marks_event(
+    sql_repository: SqlJobRepository,
+) -> None:
+    now = datetime(2026, 7, 25, 12, 0, tzinfo=UTC)
+    outbox = SqlJobOutbox(sql_repository, event_id_factory=lambda: "event-1")
+    service = JobService(
+        sql_repository,
+        outbox=outbox,
+        job_id_factory=lambda: "job-1",
+    )
+    service.create(
+        operation=JobOperation.DOWNLOAD_VIDEO,
+        source_url="https://example.com/video",
+        parameters={"quality": "720p"},
+    )
+    queue = InMemoryJobQueue(clock=lambda: now)
+    relay = OutboxRelay(
+        sql_repository,
+        queue,
+        owner="relay-1",
+        clock=lambda: now,
+    )
+
+    assert relay.run_once() == 1
+    claim = queue.dequeue(timeout_seconds=0)
+    assert claim is not None and claim.job_id == "job-1"
+    assert relay.run_once() == 0
+
+
+def test_outbox_relay_releases_event_after_queue_failure(
+    sql_repository: SqlJobRepository,
+) -> None:
+    now = datetime(2026, 7, 25, 12, 0, tzinfo=UTC)
+    outbox = SqlJobOutbox(sql_repository, event_id_factory=lambda: "event-1")
+    service = JobService(
+        sql_repository,
+        outbox=outbox,
+        job_id_factory=lambda: "job-1",
+    )
+    service.create(
+        operation=JobOperation.DOWNLOAD_VIDEO,
+        source_url="https://example.com/video",
+        parameters={"quality": "720p"},
+    )
+    failing = OutboxRelay(
+        sql_repository,
+        FailingQueue(),
+        owner="relay-1",
+        clock=lambda: now,
+    )
+
+    assert failing.run_once() == 0
+    events = sql_repository.claim_outbox(
+        owner="relay-2",
+        now=now,
+        lease_seconds=30,
+        limit=10,
+    )
+    assert len(events) == 1
+    assert events[0].attempt_count == 2
+
+
+def test_sql_outbox_recovers_expired_relay_lease(
+    sql_repository: SqlJobRepository,
+) -> None:
+    now = datetime(2026, 7, 25, 12, 0, tzinfo=UTC)
+    service = JobService(
+        sql_repository,
+        outbox=SqlJobOutbox(sql_repository, event_id_factory=lambda: "event-1"),
+        job_id_factory=lambda: "job-1",
+    )
+    service.create(
+        operation=JobOperation.DOWNLOAD_VIDEO,
+        source_url="https://example.com/video",
+        parameters={"quality": "720p"},
+    )
+
+    first = sql_repository.claim_outbox(
+        owner="relay-1",
+        now=now,
+        lease_seconds=30,
+        limit=10,
+    )
+    while_leased = sql_repository.claim_outbox(
+        owner="relay-2",
+        now=now + timedelta(seconds=29),
+        lease_seconds=30,
+        limit=10,
+    )
+    recovered = sql_repository.claim_outbox(
+        owner="relay-2",
+        now=now + timedelta(seconds=30),
+        lease_seconds=30,
+        limit=10,
+    )
+
+    assert len(first) == 1
+    assert while_leased == ()
+    assert len(recovered) == 1
+    assert recovered[0].attempt_count == 2
+    assert recovered[0].lease_owner == "relay-2"
+
+
+def test_job_service_rejects_direct_queue_with_outbox(
+    sql_repository: SqlJobRepository,
+) -> None:
+    with pytest.raises(ValueError, match="cannot use direct queue"):
+        JobService(
+            sql_repository,
+            queue=InMemoryJobQueue(),
+            outbox=SqlJobOutbox(sql_repository),
+        )
 
 
 @pytest.fixture

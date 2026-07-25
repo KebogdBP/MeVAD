@@ -27,6 +27,10 @@ class JobRepository(Protocol):
         """Return non-terminal jobs with expired worker leases."""
         ...
 
+    def close(self) -> None:
+        """Release resources owned by the repository."""
+        ...
+
 
 class InMemoryJobRepository:
     """Thread-safe process-local repository for tests and development."""
@@ -62,3 +66,6 @@ class InMemoryJobRepository:
                 and job.lease_expires_at <= now
             )
             return tuple(sorted(expired, key=lambda job: job.lease_expires_at or now)[:limit])
+
+    def close(self) -> None:
+        """No-op for the process-local adapter."""

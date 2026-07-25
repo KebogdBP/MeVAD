@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     worker_claim_stale_seconds: int = Field(default=120, ge=30, le=3600)
     worker_retry_base_seconds: int = Field(default=5, ge=1, le=3600)
     worker_retry_max_seconds: int = Field(default=300, ge=1, le=86400)
+    outbox_poll_interval_seconds: float = Field(default=1.0, ge=0.1, le=60)
+    outbox_lease_seconds: int = Field(default=30, ge=5, le=3600)
+    outbox_batch_size: int = Field(default=100, ge=1, le=1000)
     job_max_attempts: int = Field(default=3, ge=1, le=10)
     storage_root: Path = Path("storage/jobs")
 

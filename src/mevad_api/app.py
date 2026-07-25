@@ -4,7 +4,13 @@ from fastapi import FastAPI
 
 from mevad.adapters import YtDlpAnalyzer
 from mevad.analyzer import MediaAnalyzer
-from mevad.jobs import InMemoryJobQueue, InMemoryJobRepository, JobQueue, JobService
+from mevad.jobs import (
+    InMemoryJobQueue,
+    InMemoryJobRepository,
+    JobQueue,
+    JobService,
+    SqlJobOutbox,
+)
 from mevad.jobs.redis_queue import RedisJobQueue
 from mevad.jobs.sql_repository import SqlJobRepository
 from mevad.runtime import RuntimeTools, discover_runtime_tools
@@ -39,6 +45,7 @@ def create_app(
     selected_queue = job_queue or _create_queue(selected_settings)
     app.state.job_queue = selected_queue
     app.state.job_service = job_service or _create_job_service(selected_settings, selected_queue)
+    app.router.add_event_handler("shutdown", app.state.job_service.close)
 
     app.include_router(health.router)
     app.include_router(media.router, prefix=selected_settings.api_prefix)
@@ -62,7 +69,7 @@ def _create_job_service(settings: Settings, queue: JobQueue) -> JobService:
             repository.create_schema()
         return JobService(
             repository,
-            queue=queue,
+            outbox=SqlJobOutbox(repository),
             default_max_attempts=settings.job_max_attempts,
         )
     return JobService(

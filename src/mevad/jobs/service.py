@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from mevad.exceptions import InvalidJobTransitionError, JobNotFoundError, JobQueueError
 from mevad.jobs.models import Job, JobOperation, JobParameter, JobStatus
+from mevad.jobs.outbox import JobOutbox
 from mevad.jobs.queue import JobQueue
 from mevad.jobs.repository import JobRepository
 from mevad.security import normalize_remote_url
@@ -25,12 +26,16 @@ class JobService:
         repository: JobRepository,
         *,
         queue: JobQueue | None = None,
+        outbox: JobOutbox | None = None,
         default_max_attempts: int = 3,
         clock: Clock | None = None,
         job_id_factory: JobIdFactory | None = None,
     ) -> None:
         self._repository = repository
         self._queue = queue
+        if queue is not None and outbox is not None:
+            raise ValueError("Job service cannot use direct queue and outbox together.")
+        self._outbox = outbox
         if not 1 <= default_max_attempts <= 10:
             raise ValueError("Default max attempts must be between 1 and 10.")
         self._default_max_attempts = default_max_attempts
@@ -57,7 +62,10 @@ class JobService:
             version=1,
             max_attempts=self._default_max_attempts,
         )
-        self._repository.add(job)
+        if self._outbox is not None:
+            self._outbox.add(job)
+        else:
+            self._repository.add(job)
         if self._queue is not None:
             try:
                 self._queue.enqueue(job.job_id)
@@ -76,6 +84,11 @@ class JobService:
         if job is None:
             raise JobNotFoundError("Job was not found.")
         return job
+
+    def close(self) -> None:
+        """Release repository resources owned by this service."""
+
+        self._repository.close()
 
     def cancel(self, job_id: str) -> Job:
         job = self.get(job_id)
