@@ -127,7 +127,7 @@ version prefix для orchestrator probes.
 
 - authentication и rate limits;
 - PostgreSQL/Redis;
-- job creation и polling;
+- durable job storage и worker execution;
 - download endpoints;
 - request IDs и structured logging;
 - CORS policy;

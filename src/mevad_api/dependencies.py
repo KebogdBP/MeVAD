@@ -5,6 +5,7 @@ from typing import Annotated, cast
 from fastapi import Depends, Request
 
 from mevad.analyzer import MediaAnalyzer
+from mevad.jobs import JobService
 from mevad.runtime import RuntimeTools
 from mevad_api.config import Settings
 
@@ -27,6 +28,13 @@ def get_runtime_tools(request: Request) -> RuntimeTools:
     return cast(RuntimeTools, request.app.state.runtime_tools)
 
 
+def get_job_service(request: Request) -> JobService:
+    """Get the process-local job application service."""
+
+    return cast(JobService, request.app.state.job_service)
+
+
 SettingsDependency = Annotated[Settings, Depends(get_app_settings)]
 AnalyzerDependency = Annotated[MediaAnalyzer, Depends(get_media_analyzer)]
 RuntimeToolsDependency = Annotated[RuntimeTools, Depends(get_runtime_tools)]
+JobServiceDependency = Annotated[JobService, Depends(get_job_service)]

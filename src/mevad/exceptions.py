@@ -35,3 +35,19 @@ class MediaProcessingError(MeVADError):
 
 class InvalidClipIntervalError(MediaProcessingError, ValueError):
     """Raised when a requested clip interval is invalid."""
+
+
+class JobError(MeVADError):
+    """Base class for job system errors."""
+
+
+class JobNotFoundError(JobError):
+    """Raised when a job identifier does not exist."""
+
+
+class InvalidJobTransitionError(JobError):
+    """Raised when a job state transition is not allowed."""
+
+
+class ConcurrentJobUpdateError(JobError):
+    """Raised when optimistic job version validation fails."""

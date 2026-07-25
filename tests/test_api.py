@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from fastapi.testclient import TestClient
 
 from mevad.exceptions import InvalidSourceURLError, MediaAnalysisError
+from mevad.jobs import InMemoryJobRepository, JobOperation, JobService
 from mevad.models import (
     MediaAction,
     MediaAnalysis,
@@ -184,17 +185,112 @@ def test_analyzer_request_schema_rejects_empty_url() -> None:
     assert response.status_code == 422
 
 
+def test_creates_reads_and_cancels_video_job() -> None:
+    service = JobService(
+        InMemoryJobRepository(),
+        job_id_factory=lambda: "job-1",
+    )
+    with _client(job_service=service) as client:
+        create_response = client.post(
+            "/api/v1/jobs",
+            json={
+                "operation": "download_video",
+                "source_url": "https://EXAMPLE.com/video#fragment",
+                "options": {"quality": "720p", "container": "mp4"},
+            },
+        )
+        get_response = client.get("/api/v1/jobs/job-1")
+        cancel_response = client.post("/api/v1/jobs/job-1/cancel")
+
+    assert create_response.status_code == 201
+    assert create_response.json()["status"] == "queued"
+    assert create_response.json()["source_url"] == "https://example.com/video"
+    assert create_response.json()["parameters"] == {
+        "quality": "720p",
+        "container": "mp4",
+    }
+    assert get_response.status_code == 200
+    assert get_response.json()["version"] == 1
+    assert cancel_response.status_code == 200
+    assert cancel_response.json()["status"] == "cancelled"
+    assert cancel_response.json()["version"] == 2
+
+
+def test_job_api_validates_discriminated_options() -> None:
+    with _client() as client:
+        response = client.post(
+            "/api/v1/jobs",
+            json={
+                "operation": "make_loop",
+                "source_url": "https://example.com/video",
+                "options": {
+                    "start_seconds": 0,
+                    "end_seconds": 31,
+                    "output_format": "gif",
+                },
+            },
+        )
+
+    assert response.status_code == 422
+
+
+def test_job_api_rejects_unsafe_source_before_enqueue() -> None:
+    with _client() as client:
+        response = client.post(
+            "/api/v1/jobs",
+            json={
+                "operation": "extract_audio",
+                "source_url": "http://127.0.0.1/private",
+                "options": {"codec": "mp3", "bitrate": "192"},
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "invalid_source_url"
+
+
+def test_job_api_returns_stable_not_found_error() -> None:
+    with _client() as client:
+        get_response = client.get("/api/v1/jobs/missing")
+        cancel_response = client.post("/api/v1/jobs/missing/cancel")
+
+    assert get_response.status_code == 404
+    assert get_response.json()["error"]["code"] == "job_not_found"
+    assert cancel_response.status_code == 404
+
+
+def test_job_api_rejects_cancelling_terminal_job() -> None:
+    service = JobService(
+        InMemoryJobRepository(),
+        job_id_factory=lambda: "job-1",
+    )
+    service.create(
+        operation=JobOperation.DOWNLOAD_VIDEO,
+        source_url="https://example.com/video",
+        parameters={"quality": "best"},
+    )
+    service.cancel("job-1")
+
+    with _client(job_service=service) as client:
+        response = client.post("/api/v1/jobs/job-1/cancel")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "job_not_cancellable"
+
+
 @contextmanager
 def _client(
     *,
     settings: Settings | None = None,
     analyzer: FakeAnalyzer | None = None,
     runtime_tools: RuntimeTools | None = None,
+    job_service: JobService | None = None,
 ) -> Iterator[TestClient]:
     app = create_app(
         settings=settings or _settings(),
         analyzer=analyzer or FakeAnalyzer(),
         runtime_tools=runtime_tools or RuntimeTools(ffmpeg="/bin/ffmpeg", ffprobe="/bin/ffprobe"),
+        job_service=job_service,
     )
     with TestClient(app) as client:
         yield client

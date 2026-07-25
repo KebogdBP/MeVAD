@@ -22,8 +22,9 @@
 - Video Cutter с быстрым и точным режимами.
 - GIF & Loop Maker для GIF, WebP, MP4 и WebM.
 - FastAPI foundation с health/readiness и versioned API.
+- Job System с типизированными задачами, status polling и отменой.
 
-Фоновая job system и web-интерфейс ещё не реализованы.
+Реальный background worker и web-интерфейс ещё не реализованы.
 
 ## Требования
 
@@ -144,6 +145,17 @@ Remote analyzer по умолчанию выключен. `MEVAD_ANALYZER_ENABLE
 включать только в окружении с сетевой SSRF-изоляцией. Интерактивная документация
 доступна по `/docs` и отключается через `MEVAD_API_DOCS_ENABLED=false`.
 
+Job API:
+
+```text
+POST /api/v1/jobs
+GET  /api/v1/jobs/{job_id}
+POST /api/v1/jobs/{job_id}/cancel
+```
+
+Сейчас задачи сохраняются в process-local memory и не выполняются. Этот backend
+предназначен только для разработки и тестирования будущего worker contract.
+
 ## Проверки
 
 ```bash
@@ -164,6 +176,7 @@ pytest --cov=mevad --cov=mevad_api --cov-report=term-missing
 - [Video Cutter Architecture](docs/architecture/VIDEO_CUTTER.md)
 - [GIF and Loop Maker Architecture](docs/architecture/GIF_LOOP_MAKER.md)
 - [API Foundation Architecture](docs/architecture/API_FOUNDATION.md)
+- [Job System Architecture](docs/architecture/JOB_SYSTEM.md)
 
 ## Планируемая архитектура
 
