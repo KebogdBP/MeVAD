@@ -35,6 +35,7 @@
 - timestamped Redis claim reaper для crash window до SQL lease.
 - delayed exponential retries и transient/permanent error classification.
 - transactional PostgreSQL outbox для initial Redis dispatch.
+- checksum-verified versioned PostgreSQL migration runner.
 - отдельный worker process и локальный Docker Compose stack.
 
 Web-интерфейс ещё не реализован.
@@ -187,7 +188,8 @@ outage не теряет job и не заставляет API откатыват
 
 Для ручного запуска задайте `MEVAD_JOB_BACKEND=postgres`,
 `MEVAD_QUEUE_BACKEND=redis`, database/Redis URLs, затем запустите
-`uvicorn mevad_api.app:app`, `mevad-outbox` и `mevad-worker` отдельно.
+`mevad-migrate`, `uvicorn mevad_api.app:app`, `mevad-outbox` и
+`mevad-worker` отдельно. Migration failure должна останавливать deployment.
 
 ## Проверки
 
@@ -233,4 +235,4 @@ FastAPI
 ```
 
 Следующий инфраструктурный инкремент добавит retry backoff, TTL результатов,
-cleanup scheduler и полноценный migration runner.
+cleanup scheduler.

@@ -10,6 +10,7 @@ RUN apt-get update \
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
+COPY migrations ./migrations
 RUN python -m pip install --no-cache-dir .
 
 RUN useradd --create-home --uid 10001 mevad \

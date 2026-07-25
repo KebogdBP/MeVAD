@@ -12,11 +12,6 @@ services:
       retries: 10
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./migrations/0001_create_jobs.sql:/docker-entrypoint-initdb.d/0001_create_jobs.sql:ro
-      - ./migrations/0002_add_job_attempts.sql:/docker-entrypoint-initdb.d/0002_add_job_attempts.sql:ro
-      - ./migrations/0003_add_job_leases.sql:/docker-entrypoint-initdb.d/0003_add_job_leases.sql:ro
-      - ./migrations/0004_add_claim_receipts.sql:/docker-entrypoint-initdb.d/0004_add_claim_receipts.sql:ro
-      - ./migrations/0005_create_job_outbox.sql:/docker-entrypoint-initdb.d/0005_create_job_outbox.sql:ro
 
   redis:
     image: redis:8-alpine
@@ -29,6 +24,16 @@ services:
     volumes:
       - redis-data:/data
 
+  migrate:
+    build: .
+    command: ["mevad-migrate"]
+    environment:
+      MEVAD_DATABASE_URL: postgresql+psycopg://mevad:mevad@postgres:5432/mevad
+      MEVAD_REQUIRE_MEDIA_TOOLS: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build: .
     environment: &mevad-environment
@@ -40,8 +45,8 @@ services:
       MEVAD_REQUIRE_MEDIA_TOOLS: "false"
       MEVAD_STORAGE_ROOT: /app/storage/jobs
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     ports:
@@ -54,8 +59,8 @@ services:
     command: ["mevad-worker"]
     environment: *mevad-environment
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     volumes:
@@ -66,8 +71,8 @@ services:
     command: ["mevad-outbox"]
     environment: *mevad-environment
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 

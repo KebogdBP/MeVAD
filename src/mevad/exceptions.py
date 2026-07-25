@@ -59,3 +59,7 @@ class ConcurrentJobUpdateError(JobError):
 
 class JobQueueError(JobError):
     """Raised when a job cannot be published to or claimed from the queue."""
+
+
+class MigrationError(MeVADError):
+    """Raised when versioned database migrations cannot be applied safely."""

@@ -42,9 +42,11 @@ PostgreSQL хранит полную модель задачи. Redis перен
 использует dialect `postgresql+psycopg`.
 
 Начальная PostgreSQL schema находится в
-`migrations/0001_create_jobs.sql`. Compose монтирует её в init directory.
-`MEVAD_AUTO_CREATE_SCHEMA=true` допустим для ephemeral development, но не
-заменяет versioned migrations.
+`migrations/0001_create_jobs.sql`. `mevad-migrate` проверяет непрерывную
+последовательность файлов и их SHA-256 checksums, затем применяет pending batch
+в transaction. Compose не запускает API, worker и outbox до успешного
+migration service. `MEVAD_AUTO_CREATE_SCHEMA=true` остаётся только для
+ephemeral development/tests.
 
 ## Redis delivery
 
@@ -154,10 +156,15 @@ Compose поднимает PostgreSQL, Redis с AOF, API, outbox relay и worker
 API/worker запускаются после healthchecks инфраструктуры и используют общий
 named volume результатов.
 
+Для ручного обновления schema:
+
+```bash
+mevad-migrate
+```
+
 ## Следующие ограничения
 
 - retry jitter;
 - command outbox для retry/dead-letter broker transitions;
-- migration runner;
 - result TTL/cleanup scheduler;
 - structured metrics and tracing.
