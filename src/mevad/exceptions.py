@@ -37,6 +37,10 @@ class MediaProcessTimeoutError(MediaProcessingError):
     """Raised when a managed media subprocess exceeds its deadline."""
 
 
+class MediaResourceLimitError(MediaProcessingError):
+    """Raised when a media subprocess exceeds an enforced OS resource limit."""
+
+
 class InvalidClipIntervalError(MediaProcessingError, ValueError):
     """Raised when a requested clip interval is invalid."""
 

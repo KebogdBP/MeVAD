@@ -8,6 +8,7 @@ from mevad.adapters import (
     YtDlpCommandAudioExtractor,
     YtDlpCommandVideoDownloader,
 )
+from mevad.adapters.process import ProcessLimits, limited_process_runner
 from mevad.jobs import JobService
 from mevad_worker.executor import JobExecutor, WorkerDependencies
 from mevad_worker.storage import WorkspaceManager
@@ -21,16 +22,24 @@ def create_default_executor(
     worker_id: str | None = None,
     lease_duration_seconds: int = 60,
     heartbeat_interval_seconds: int = 15,
+    process_limits: ProcessLimits | None = None,
 ) -> JobExecutor:
     """Compose the production-intent worker adapters."""
 
+    runner = limited_process_runner(process_limits or ProcessLimits())
     return JobExecutor(
         service=service,
         dependencies=WorkerDependencies(
-            video_downloader=YtDlpCommandVideoDownloader(timeout_seconds=media_timeout_seconds),
-            audio_extractor=YtDlpCommandAudioExtractor(timeout_seconds=media_timeout_seconds),
-            video_cutter=FFmpegVideoCutter(),
-            loop_maker=FFmpegLoopMaker(),
+            video_downloader=YtDlpCommandVideoDownloader(
+                timeout_seconds=media_timeout_seconds,
+                runner=runner,
+            ),
+            audio_extractor=YtDlpCommandAudioExtractor(
+                timeout_seconds=media_timeout_seconds,
+                runner=runner,
+            ),
+            video_cutter=FFmpegVideoCutter(runner=runner),
+            loop_maker=FFmpegLoopMaker(runner=runner),
         ),
         workspaces=WorkspaceManager(storage_root),
         worker_id=worker_id,

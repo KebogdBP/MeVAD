@@ -170,6 +170,17 @@ process арендует expired terminal rows, удаляет confined job work
 - `MEVAD_CLEANUP_LEASE_SECONDS`;
 - `MEVAD_CLEANUP_BATCH_SIZE`.
 
+## Media process limits
+
+Linux worker применяет к каждому FFmpeg/yt-dlp process и descendants:
+
+- `MEVAD_WORKER_CPU_LIMIT_SECONDS`;
+- `MEVAD_WORKER_MEMORY_LIMIT_BYTES`;
+- `MEVAD_WORKER_FILE_SIZE_LIMIT_BYTES`;
+- `MEVAD_WORKER_OPEN_FILES_LIMIT`.
+
+Это дополняет wall-clock timeout и не заменяет container/cgroup limits.
+
 Для ручного обновления schema:
 
 ```bash

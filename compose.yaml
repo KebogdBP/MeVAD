@@ -57,6 +57,9 @@ services:
   worker:
     build: .
     command: ["mevad-worker"]
+    cpus: 2.0
+    mem_limit: 3g
+    pids_limit: 256
     environment: *mevad-environment
     depends_on:
       migrate:

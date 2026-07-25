@@ -10,6 +10,7 @@ from mevad.exceptions import (
     MediaDownloadError,
     MediaProcessingError,
     MediaProcessTimeoutError,
+    MediaResourceLimitError,
     MissingRuntimeToolError,
     UnsupportedMediaError,
 )
@@ -250,6 +251,10 @@ def test_worker_persists_stable_timeout_error(tmp_path: Path) -> None:
         (MissingRuntimeToolError("private tool path"), "runtime_tool_missing"),
         (UnsupportedMediaError("private extractor output"), "media_unsupported"),
         (MediaDownloadError("private upstream error"), "job_execution_failed"),
+        (
+            MediaResourceLimitError("private resource detail"),
+            "job_resource_limit_exceeded",
+        ),
     ],
 )
 def test_worker_classifies_stable_failure_codes(

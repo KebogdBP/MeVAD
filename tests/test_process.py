@@ -1,10 +1,11 @@
+import json
 import sys
 from threading import Event, Thread
 from time import sleep
 
 import pytest
 
-from mevad.adapters.process import run_process
+from mevad.adapters.process import ProcessLimits, limited_process_runner, run_process
 from mevad.exceptions import DownloadCancelledError, MediaProcessTimeoutError
 
 
@@ -139,3 +140,45 @@ def test_managed_process_rejects_invalid_invocation() -> None:
         run_process([sys.executable], timeout=0)
     with pytest.raises(ValueError, match="empty"):
         run_process([], timeout=1)
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux rlimits are unavailable")
+def test_limited_runner_applies_child_resource_limits() -> None:
+    limits = ProcessLimits(
+        cpu_seconds=123,
+        memory_bytes=512 * 1024 * 1024,
+        file_size_bytes=50 * 1024 * 1024,
+        open_files=64,
+    )
+    runner = limited_process_runner(limits)
+    result = runner(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import json, resource; "
+                "print(json.dumps([resource.getrlimit(name)[0] for name in "
+                "(resource.RLIMIT_CPU, resource.RLIMIT_AS, "
+                "resource.RLIMIT_FSIZE, resource.RLIMIT_NOFILE)]))"
+            ),
+        ],
+        timeout=5,
+    )
+
+    assert json.loads(result.stdout) == [
+        limits.cpu_seconds,
+        limits.memory_bytes,
+        limits.file_size_bytes,
+        limits.open_files,
+    ]
+
+
+def test_process_limits_reject_unsafe_values() -> None:
+    with pytest.raises(ValueError, match="CPU"):
+        ProcessLimits(cpu_seconds=0)
+    with pytest.raises(ValueError, match="Memory"):
+        ProcessLimits(memory_bytes=1024)
+    with pytest.raises(ValueError, match="File size"):
+        ProcessLimits(file_size_bytes=1024)
+    with pytest.raises(ValueError, match="Open-files"):
+        ProcessLimits(open_files=1)

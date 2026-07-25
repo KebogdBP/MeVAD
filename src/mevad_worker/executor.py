@@ -10,6 +10,7 @@ from mevad.downloader import CancellationToken, VideoDownloader
 from mevad.exceptions import (
     DownloadCancelledError,
     MediaProcessTimeoutError,
+    MediaResourceLimitError,
     MeVADError,
     MissingRuntimeToolError,
     UnsupportedMediaError,
@@ -196,6 +197,12 @@ class JobExecutor:
                 job_id,
                 error_code="job_timed_out",
                 error_message="The media job exceeded its processing deadline.",
+            )
+        except MediaResourceLimitError:
+            return self._fail_unless_cancelled(
+                job_id,
+                error_code="job_resource_limit_exceeded",
+                error_message="The media job exceeded an execution resource limit.",
             )
         except MissingRuntimeToolError:
             return self._fail_unless_cancelled(

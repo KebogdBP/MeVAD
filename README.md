@@ -37,6 +37,7 @@
 - transactional PostgreSQL outbox для initial Redis dispatch.
 - checksum-verified versioned PostgreSQL migration runner.
 - leased TTL cleanup для job workspaces и результатов.
+- Linux rlimits для FFmpeg/yt-dlp и дочерних процессов.
 - отдельный worker process и локальный Docker Compose stack.
 
 Web-интерфейс ещё не реализован.
@@ -236,5 +237,4 @@ FastAPI
       └── FFmpeg
 ```
 
-Следующий инфраструктурный инкремент добавит process-level resource limits,
-network sandbox и observability.
+Следующий инфраструктурный инкремент добавит network sandbox и observability.

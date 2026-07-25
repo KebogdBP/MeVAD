@@ -143,13 +143,17 @@ error_message: The media job exceeded its processing deadline.
 запускают yt-dlp отдельной командой; embedded Python API остаётся только в
 локальных CLI/analyzer границах.
 
+Production factory связывает все command adapters с Linux rlimits:
+CPU seconds, address space, output file size и open descriptors. Потомки
+yt-dlp/FFmpeg наследуют policy. SIGXCPU/SIGXFSZ становятся permanent
+`job_resource_limit_exceeded`; wall-clock timeout остаётся отдельным пределом.
+
 ## Текущая граница
 
 `SqlJobRepository`, `RedisJobQueue` и `WorkerRuntime` теперь связывают API и
 отдельный process. Следующий infrastructure layer требует:
 
 - retry jitter;
-- process-level resource limits;
 - network sandbox.
 
 Runtime уже выполняет два selective recovery прохода: timestamped Redis reaper

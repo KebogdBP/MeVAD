@@ -8,6 +8,7 @@ def test_retry_classifier_defaults_unknown_errors_to_permanent() -> None:
     assert is_retryable_error("job_timed_out")
     assert is_retryable_error("worker_lease_expired")
     assert not is_retryable_error("job_invalid_parameters")
+    assert not is_retryable_error("job_resource_limit_exceeded")
     assert not is_retryable_error("unknown_error")
     assert not is_retryable_error(None)
 

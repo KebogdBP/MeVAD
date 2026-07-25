@@ -10,6 +10,7 @@ from time import monotonic
 from typing import Protocol
 from uuid import uuid4
 
+from mevad.adapters.process import ProcessLimits
 from mevad.exceptions import (
     ConcurrentJobUpdateError,
     InvalidJobTransitionError,
@@ -188,6 +189,12 @@ def create_runtime(settings: Settings | None = None) -> WorkerRuntime:
             worker_id=worker_id,
             lease_duration_seconds=selected.worker_lease_seconds,
             heartbeat_interval_seconds=selected.worker_heartbeat_seconds,
+            process_limits=ProcessLimits(
+                cpu_seconds=selected.worker_cpu_limit_seconds,
+                memory_bytes=selected.worker_memory_limit_bytes,
+                file_size_bytes=selected.worker_file_size_limit_bytes,
+                open_files=selected.worker_open_files_limit,
+            ),
         ),
         poll_timeout_seconds=selected.worker_poll_timeout_seconds,
         recovery_interval_seconds=selected.worker_recovery_interval_seconds,

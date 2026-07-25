@@ -3,6 +3,7 @@
 import os
 import signal
 import subprocess
+import sys
 from collections import deque
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ from mevad.exceptions import (
     DownloadCancelledError,
     MediaProcessingError,
     MediaProcessTimeoutError,
+    MediaResourceLimitError,
 )
 
 PollCallback = Callable[[], None]
@@ -31,6 +33,26 @@ class ProcessResult:
     returncode: int
     stdout: str
     stderr: str
+
+
+@dataclass(frozen=True, slots=True)
+class ProcessLimits:
+    """POSIX limits inherited by a media process and its descendants."""
+
+    cpu_seconds: int = 7200
+    memory_bytes: int = 2 * 1024 * 1024 * 1024
+    file_size_bytes: int = 10 * 1024 * 1024 * 1024
+    open_files: int = 256
+
+    def __post_init__(self) -> None:
+        if not 1 <= self.cpu_seconds <= 86400:
+            raise ValueError("CPU limit must be between 1 and 86400 seconds.")
+        if not 64 * 1024 * 1024 <= self.memory_bytes <= 128 * 1024 * 1024 * 1024:
+            raise ValueError("Memory limit must be between 64 MiB and 128 GiB.")
+        if not 1024 * 1024 <= self.file_size_bytes <= 1024**5:
+            raise ValueError("File size limit must be between 1 MiB and 1 PiB.")
+        if not 32 <= self.open_files <= 65536:
+            raise ValueError("Open-files limit must be between 32 and 65536.")
 
 
 class _BoundedCapture:
@@ -72,6 +94,7 @@ def run_process(
     cancellation: CancellationToken | None = None,
     on_poll: PollCallback | None = None,
     on_stdout_line: LineCallback | None = None,
+    limits: ProcessLimits | None = None,
 ) -> ProcessResult:
     """Run a managed no-shell process with cancellation and hard timeout."""
 
@@ -82,14 +105,7 @@ def run_process(
     if cancellation is not None and cancellation.is_cancelled:
         raise DownloadCancelledError("Media operation was cancelled.")
     try:
-        process = subprocess.Popen(
-            list(arguments),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            shell=False,
-            start_new_session=True,
-        )
+        process = _spawn_process(arguments, limits)
     except OSError as error:
         raise MediaProcessingError(f"Media tool could not start: {error}") from error
 
@@ -141,11 +157,83 @@ def run_process(
             reader.join(timeout=2)
 
     _drain_lines(stdout_queue, on_stdout_line)
+    if process.returncode in {
+        -getattr(signal, "SIGXCPU", 24),
+        -getattr(signal, "SIGXFSZ", 25),
+    }:
+        raise MediaResourceLimitError("Media process exceeded an OS resource limit.")
     return ProcessResult(
         returncode=process.returncode,
         stdout=stdout_lines.render(),
         stderr=stderr_lines.render(),
     )
+
+
+def limited_process_runner(limits: ProcessLimits) -> ProcessRunner:
+    """Bind one validated limits policy to the shared runner."""
+
+    def runner(
+        arguments: Sequence[str],
+        *,
+        timeout: float,
+        cancellation: CancellationToken | None = None,
+        on_poll: PollCallback | None = None,
+        on_stdout_line: LineCallback | None = None,
+    ) -> ProcessResult:
+        return run_process(
+            arguments,
+            timeout=timeout,
+            cancellation=cancellation,
+            on_poll=on_poll,
+            on_stdout_line=on_stdout_line,
+            limits=limits,
+        )
+
+    return runner
+
+
+def _spawn_process(
+    arguments: Sequence[str],
+    limits: ProcessLimits | None,
+) -> subprocess.Popen[str]:
+    preexec = _resource_preexec(limits)
+    if preexec is None:
+        return subprocess.Popen(
+            list(arguments),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            shell=False,
+            start_new_session=True,
+        )
+    return subprocess.Popen(
+        list(arguments),
+        preexec_fn=preexec,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        shell=False,
+        start_new_session=True,
+    )
+
+
+def _resource_preexec(limits: ProcessLimits | None) -> Callable[[], None] | None:
+    if limits is None or not sys.platform.startswith("linux"):
+        return None
+    import resource
+
+    def apply() -> None:
+        for resource_name, requested in (
+            (resource.RLIMIT_CPU, limits.cpu_seconds),
+            (resource.RLIMIT_AS, limits.memory_bytes),
+            (resource.RLIMIT_FSIZE, limits.file_size_bytes),
+            (resource.RLIMIT_NOFILE, limits.open_files),
+        ):
+            _, hard = resource.getrlimit(resource_name)
+            selected = requested if hard == resource.RLIM_INFINITY else min(requested, hard)
+            resource.setrlimit(resource_name, (selected, selected))
+
+    return apply
 
 
 def _terminate(process: subprocess.Popen[str]) -> None:

@@ -35,6 +35,18 @@ class Settings(BaseSettings):
     auto_create_schema: bool = False
     worker_poll_timeout_seconds: int = Field(default=5, ge=1, le=60)
     worker_media_timeout_seconds: int = Field(default=7200, ge=60, le=86400)
+    worker_cpu_limit_seconds: int = Field(default=7200, ge=1, le=86400)
+    worker_memory_limit_bytes: int = Field(
+        default=2 * 1024 * 1024 * 1024,
+        ge=64 * 1024 * 1024,
+        le=128 * 1024 * 1024 * 1024,
+    )
+    worker_file_size_limit_bytes: int = Field(
+        default=10 * 1024 * 1024 * 1024,
+        ge=1024 * 1024,
+        le=1024**5,
+    )
+    worker_open_files_limit: int = Field(default=256, ge=32, le=65536)
     worker_id: str | None = Field(default=None, min_length=1, max_length=128)
     worker_lease_seconds: int = Field(default=60, ge=5, le=3600)
     worker_heartbeat_seconds: int = Field(default=15, ge=1, le=300)
