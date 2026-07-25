@@ -127,3 +127,42 @@ class VideoDownloadResult:
     title: str
     output_path: Path
     filesize_bytes: int
+
+
+class AudioCodec(StrEnum):
+    """Supported extracted-audio output codecs."""
+
+    MP3 = "mp3"
+    M4A = "m4a"
+    OPUS = "opus"
+    WAV = "wav"
+
+
+class AudioBitrate(StrEnum):
+    """User-facing compressed-audio bitrate presets."""
+
+    K128 = "128"
+    K192 = "192"
+    K256 = "256"
+    K320 = "320"
+
+
+@dataclass(frozen=True, slots=True)
+class AudioExtractionRequest:
+    """Parameters required to extract audio from one remote media source."""
+
+    source: MediaSource
+    output_directory: Path
+    codec: AudioCodec = AudioCodec.MP3
+    bitrate: AudioBitrate = AudioBitrate.K192
+
+
+@dataclass(frozen=True, slots=True)
+class AudioExtractionResult:
+    """Completed audio extraction result."""
+
+    media_id: str
+    title: str
+    codec: AudioCodec
+    output_path: Path
+    filesize_bytes: int

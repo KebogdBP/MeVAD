@@ -7,9 +7,12 @@ from dataclasses import asdict
 from pathlib import Path
 
 from mevad import __version__
-from mevad.adapters import YtDlpAnalyzer, YtDlpVideoDownloader
+from mevad.adapters import YtDlpAnalyzer, YtDlpAudioExtractor, YtDlpVideoDownloader
 from mevad.exceptions import InvalidSourceURLError, MediaAnalysisError, MediaDownloadError
 from mevad.models import (
+    AudioBitrate,
+    AudioCodec,
+    AudioExtractionRequest,
     DownloadProgress,
     MediaSource,
     SourceKind,
@@ -64,6 +67,29 @@ def build_parser() -> argparse.ArgumentParser:
         choices=[container.value for container in VideoContainer],
         default=VideoContainer.AUTO.value,
     )
+
+    audio = commands.add_parser(
+        "extract-audio",
+        help="Extract audio from one remote media URL.",
+    )
+    audio.add_argument("url")
+    audio.add_argument(
+        "--output",
+        type=Path,
+        default=Path("downloads"),
+        help="Output directory (default: downloads).",
+    )
+    audio.add_argument(
+        "--codec",
+        choices=[codec.value for codec in AudioCodec],
+        default=AudioCodec.MP3.value,
+    )
+    audio.add_argument(
+        "--bitrate",
+        choices=[bitrate.value for bitrate in AudioBitrate],
+        default=AudioBitrate.K192.value,
+        help="Compressed output bitrate in kbps; ignored for WAV.",
+    )
     return parser
 
 
@@ -97,15 +123,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "download-video":
-        request = VideoDownloadRequest(
+        video_request = VideoDownloadRequest(
             source=MediaSource(kind=SourceKind.REMOTE_URL, value=args.url),
             output_directory=args.output,
             quality=VideoQuality(args.quality),
             container=VideoContainer(args.container),
         )
         try:
-            result = YtDlpVideoDownloader().download(
-                request,
+            video_result = YtDlpVideoDownloader().download(
+                video_request,
                 on_progress=_print_download_progress,
             )
         except (InvalidSourceURLError, MediaDownloadError) as error:
@@ -117,10 +143,43 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(
             json.dumps(
                 {
-                    "media_id": result.media_id,
-                    "title": result.title,
-                    "output_path": str(result.output_path),
-                    "filesize_bytes": result.filesize_bytes,
+                    "media_id": video_result.media_id,
+                    "title": video_result.title,
+                    "output_path": str(video_result.output_path),
+                    "filesize_bytes": video_result.filesize_bytes,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+
+    if args.command == "extract-audio":
+        audio_request = AudioExtractionRequest(
+            source=MediaSource(kind=SourceKind.REMOTE_URL, value=args.url),
+            output_directory=args.output,
+            codec=AudioCodec(args.codec),
+            bitrate=AudioBitrate(args.bitrate),
+        )
+        try:
+            audio_result = YtDlpAudioExtractor().extract(
+                audio_request,
+                on_progress=_print_download_progress,
+            )
+        except (InvalidSourceURLError, MediaDownloadError) as error:
+            print(f"audio error: {error}")
+            return 2
+        except KeyboardInterrupt:
+            print("audio extraction cancelled")
+            return 130
+        print(
+            json.dumps(
+                {
+                    "media_id": audio_result.media_id,
+                    "title": audio_result.title,
+                    "codec": audio_result.codec.value,
+                    "output_path": str(audio_result.output_path),
+                    "filesize_bytes": audio_result.filesize_bytes,
                 },
                 ensure_ascii=False,
                 indent=2,

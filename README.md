@@ -18,8 +18,9 @@
 - Smart URL Analyzer через изолированный `yt-dlp` adapter;
 - нормализованные форматы, субтитры, playlist metadata и доступные действия.
 - single-video downloader с пресетами качества, контейнерами и progress events.
+- Audio Extractor для MP3, M4A, Opus и WAV.
 
-Извлечение аудио, обрезка и web API ещё не реализованы.
+Обрезка, GIF и web API ещё не реализованы.
 
 ## Требования
 
@@ -73,6 +74,18 @@ mevad download-video "https://example.com/video" \
 `auto`, `mp4`, `mkv`, `webm`. Команда предназначена для локального CLI и
 наследует ограничения сетевой безопасности analyzer.
 
+Извлечение аудио:
+
+```bash
+mevad extract-audio "https://example.com/video" \
+  --codec mp3 \
+  --bitrate 192 \
+  --output downloads
+```
+
+Доступные кодеки: `mp3`, `m4a`, `opus`, `wav`. Bitrate-пресеты для сжатых
+форматов: `128`, `192`, `256`, `320` kbps. Для WAV bitrate игнорируется.
+
 ## Проверки
 
 ```bash
@@ -89,6 +102,7 @@ pytest --cov=mevad --cov-report=term-missing
 - [Initial Repository Audit](docs/audits/INITIAL_REPOSITORY_AUDIT.md)
 - [Smart URL Analyzer Architecture](docs/architecture/SMART_URL_ANALYZER.md)
 - [Video Downloader Architecture](docs/architecture/VIDEO_DOWNLOADER.md)
+- [Audio Extractor Architecture](docs/architecture/AUDIO_EXTRACTOR.md)
 
 ## Планируемая архитектура
 

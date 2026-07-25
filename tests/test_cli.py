@@ -8,6 +8,9 @@ import mevad.cli
 from mevad.cli import main
 from mevad.exceptions import MediaAnalysisError, MediaDownloadError
 from mevad.models import (
+    AudioCodec,
+    AudioExtractionRequest,
+    AudioExtractionResult,
     DownloadProgress,
     DownloadStatus,
     MediaAnalysis,
@@ -146,3 +149,69 @@ def test_download_command_reports_domain_error(
 
     assert exit_code == 2
     assert "download error: failed to download" in capsys.readouterr().out
+
+
+def test_audio_command_prints_progress_and_result(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class FakeExtractor:
+        def extract(
+            self,
+            request: AudioExtractionRequest,
+            *,
+            on_progress: Any = None,
+        ) -> AudioExtractionResult:
+            assert request.output_directory == tmp_path
+            assert request.codec is AudioCodec.OPUS
+            on_progress(
+                DownloadProgress(
+                    status=DownloadStatus.DOWNLOADING,
+                    downloaded_bytes=25,
+                    total_bytes=100,
+                )
+            )
+            return AudioExtractionResult(
+                media_id="audio-1",
+                title="Example",
+                codec=AudioCodec.OPUS,
+                output_path=tmp_path / "audio.opus",
+                filesize_bytes=100,
+            )
+
+    monkeypatch.setattr(mevad.cli, "YtDlpAudioExtractor", FakeExtractor)
+
+    exit_code = main(
+        [
+            "extract-audio",
+            "https://example.com/audio",
+            "--output",
+            str(tmp_path),
+            "--codec",
+            "opus",
+            "--bitrate",
+            "256",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "downloading 25.0%" in output
+    assert '"codec": "opus"' in output
+
+
+def test_audio_command_reports_domain_error(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailingExtractor:
+        def extract(self, request: AudioExtractionRequest, **_kwargs: Any) -> AudioExtractionResult:
+            raise MediaDownloadError(f"failed to extract {request.source.value}")
+
+    monkeypatch.setattr(mevad.cli, "YtDlpAudioExtractor", FailingExtractor)
+
+    exit_code = main(["extract-audio", "https://example.com/audio"])
+
+    assert exit_code == 2
+    assert "audio error: failed to extract" in capsys.readouterr().out
