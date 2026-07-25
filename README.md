@@ -21,8 +21,9 @@
 - Audio Extractor для MP3, M4A, Opus и WAV.
 - Video Cutter с быстрым и точным режимами.
 - GIF & Loop Maker для GIF, WebP, MP4 и WebM.
+- FastAPI foundation с health/readiness и versioned API.
 
-Web API и фоновая job system ещё не реализованы.
+Фоновая job system и web-интерфейс ещё не реализованы.
 
 ## Требования
 
@@ -118,13 +119,38 @@ mevad make-loop input.mp4 \
 Форматы: `gif`, `webp`, `mp4`, `webm`. Quality presets: `small`, `balanced`,
 `high`. Скорость: `0.5`, `1`, `1.5`, `2`.
 
+## API
+
+Локальный запуск:
+
+```bash
+uvicorn mevad_api.app:app --host 127.0.0.1 --port 8000
+```
+
+Проверки процесса:
+
+```text
+GET /health/live
+GET /health/ready
+```
+
+Контракт analyzer:
+
+```text
+POST /api/v1/media/analyze
+```
+
+Remote analyzer по умолчанию выключен. `MEVAD_ANALYZER_ENABLED=true` допустимо
+включать только в окружении с сетевой SSRF-изоляцией. Интерактивная документация
+доступна по `/docs` и отключается через `MEVAD_API_DOCS_ENABLED=false`.
+
 ## Проверки
 
 ```bash
 ruff check .
 ruff format --check .
 mypy
-pytest --cov=mevad --cov-report=term-missing
+pytest --cov=mevad --cov=mevad_api --cov-report=term-missing
 ```
 
 ## Документы
@@ -137,6 +163,7 @@ pytest --cov=mevad --cov-report=term-missing
 - [Audio Extractor Architecture](docs/architecture/AUDIO_EXTRACTOR.md)
 - [Video Cutter Architecture](docs/architecture/VIDEO_CUTTER.md)
 - [GIF and Loop Maker Architecture](docs/architecture/GIF_LOOP_MAKER.md)
+- [API Foundation Architecture](docs/architecture/API_FOUNDATION.md)
 
 ## Планируемая архитектура
 

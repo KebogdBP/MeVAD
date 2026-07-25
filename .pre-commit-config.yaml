@@ -11,7 +11,11 @@ repos:
     hooks:
       - id: mypy
         args: [src, tests]
-        additional_dependencies: [pytest==8.4.1]
+        additional_dependencies:
+          - fastapi==0.140.0
+          - httpx2==2.7.0
+          - pydantic-settings==2.14.2
+          - pytest==8.4.1
         pass_filenames: false
 
   - repo: local

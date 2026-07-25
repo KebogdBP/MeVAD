@@ -1,0 +1,239 @@
+from collections.abc import Iterator
+from contextlib import contextmanager
+
+from fastapi.testclient import TestClient
+
+from mevad.exceptions import InvalidSourceURLError, MediaAnalysisError
+from mevad.models import (
+    MediaAction,
+    MediaAnalysis,
+    MediaFormat,
+    MediaSource,
+    SourceKind,
+)
+from mevad.runtime import RuntimeTools
+from mevad_api.app import create_app
+from mevad_api.config import Settings
+
+
+class FakeAnalyzer:
+    def __init__(
+        self,
+        result: MediaAnalysis | None = None,
+        *,
+        error: Exception | None = None,
+    ) -> None:
+        self.result = result or _analysis()
+        self.error = error
+        self.calls: list[MediaSource] = []
+
+    def analyze(self, source: MediaSource) -> MediaAnalysis:
+        self.calls.append(source)
+        if self.error is not None:
+            raise self.error
+        return self.result
+
+
+def test_liveness_reports_service_version() -> None:
+    with _client() as client:
+        response = client.get("/health/live")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+        "service": "mevad-api",
+        "version": "0.1.0",
+    }
+
+
+def test_readiness_requires_media_tools_by_default() -> None:
+    with _client(runtime_tools=RuntimeTools(ffmpeg=None, ffprobe=None)) as client:
+        response = client.get("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "not_ready",
+        "checks": {"core": True, "ffmpeg": False, "ffprobe": False},
+    }
+
+
+def test_readiness_can_ignore_media_tools_for_api_only_deployment() -> None:
+    with _client(
+        settings=_settings(require_media_tools=False),
+        runtime_tools=RuntimeTools(ffmpeg=None, ffprobe=None),
+    ) as client:
+        response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
+
+
+def test_docs_can_be_disabled() -> None:
+    with _client(settings=_settings(api_docs_enabled=False)) as client:
+        docs_response = client.get("/docs")
+        openapi_response = client.get("/openapi.json")
+
+    assert docs_response.status_code == 404
+    assert openapi_response.status_code == 404
+
+
+def test_analyzer_is_disabled_by_default_without_calling_adapter() -> None:
+    analyzer = FakeAnalyzer()
+    with _client(analyzer=analyzer) as client:
+        response = client.post(
+            "/api/v1/media/analyze",
+            json={"url": "https://example.com/video"},
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "error": {
+            "code": "analyzer_disabled",
+            "message": "Remote media analysis is disabled.",
+        }
+    }
+    assert analyzer.calls == []
+
+
+def test_analyzer_returns_normalized_response_when_enabled() -> None:
+    analyzer = FakeAnalyzer()
+    with _client(
+        settings=_settings(analyzer_enabled=True),
+        analyzer=analyzer,
+    ) as client:
+        response = client.post(
+            "/api/v1/media/analyze",
+            json={"url": "https://example.com/video"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "source_url": "https://example.com/video",
+        "extractor": "Example",
+        "media_id": "video-1",
+        "title": "Example video",
+        "author": "Creator",
+        "duration_seconds": 42.5,
+        "thumbnail_url": "https://cdn.example/thumbnail.jpg",
+        "webpage_url": "https://example.com/video",
+        "is_playlist": False,
+        "playlist_entry_count": None,
+        "formats": [
+            {
+                "format_id": "720p",
+                "extension": "mp4",
+                "width": 1280,
+                "height": 720,
+                "fps": 30.0,
+                "filesize_bytes": 1000,
+                "has_video": True,
+                "has_audio": True,
+            }
+        ],
+        "subtitle_languages": ["en"],
+        "available_actions": ["download_video", "extract_audio"],
+    }
+    assert analyzer.calls == [
+        MediaSource(
+            kind=SourceKind.REMOTE_URL,
+            value="https://example.com/video",
+        )
+    ]
+
+
+def test_analyzer_maps_invalid_url_to_stable_error() -> None:
+    analyzer = FakeAnalyzer(error=InvalidSourceURLError("Only http and https URLs are allowed."))
+    with _client(
+        settings=_settings(analyzer_enabled=True),
+        analyzer=analyzer,
+    ) as client:
+        response = client.post(
+            "/api/v1/media/analyze",
+            json={"url": "file:///etc/passwd"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "invalid_source_url"
+
+
+def test_analyzer_does_not_expose_upstream_error_details() -> None:
+    analyzer = FakeAnalyzer(error=MediaAnalysisError("secret upstream details"))
+    with _client(
+        settings=_settings(analyzer_enabled=True),
+        analyzer=analyzer,
+    ) as client:
+        response = client.post(
+            "/api/v1/media/analyze",
+            json={"url": "https://example.com/video"},
+        )
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "error": {
+            "code": "media_analysis_failed",
+            "message": "The media source could not be analyzed.",
+        }
+    }
+    assert "secret" not in response.text
+
+
+def test_analyzer_request_schema_rejects_empty_url() -> None:
+    with _client(settings=_settings(analyzer_enabled=True)) as client:
+        response = client.post("/api/v1/media/analyze", json={"url": ""})
+
+    assert response.status_code == 422
+
+
+@contextmanager
+def _client(
+    *,
+    settings: Settings | None = None,
+    analyzer: FakeAnalyzer | None = None,
+    runtime_tools: RuntimeTools | None = None,
+) -> Iterator[TestClient]:
+    app = create_app(
+        settings=settings or _settings(),
+        analyzer=analyzer or FakeAnalyzer(),
+        runtime_tools=runtime_tools or RuntimeTools(ffmpeg="/bin/ffmpeg", ffprobe="/bin/ffprobe"),
+    )
+    with TestClient(app) as client:
+        yield client
+
+
+def _settings(**overrides: object) -> Settings:
+    return Settings.model_validate({"environment": "test", **overrides})
+
+
+def _analysis() -> MediaAnalysis:
+    return MediaAnalysis(
+        source=MediaSource(
+            kind=SourceKind.REMOTE_URL,
+            value="https://example.com/video",
+        ),
+        extractor="Example",
+        media_id="video-1",
+        title="Example video",
+        author="Creator",
+        duration_seconds=42.5,
+        thumbnail_url="https://cdn.example/thumbnail.jpg",
+        webpage_url="https://example.com/video",
+        is_playlist=False,
+        playlist_entry_count=None,
+        formats=(
+            MediaFormat(
+                format_id="720p",
+                extension="mp4",
+                width=1280,
+                height=720,
+                fps=30.0,
+                filesize_bytes=1000,
+                has_video=True,
+                has_audio=True,
+            ),
+        ),
+        subtitle_languages=("en",),
+        available_actions=(
+            MediaAction.DOWNLOAD_VIDEO,
+            MediaAction.EXTRACT_AUDIO,
+        ),
+    )
