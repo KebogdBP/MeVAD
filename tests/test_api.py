@@ -85,6 +85,11 @@ def test_settings_reject_heartbeat_not_shorter_than_lease() -> None:
         _settings(worker_lease_seconds=10, worker_heartbeat_seconds=10)
 
 
+def test_settings_reject_retry_maximum_shorter_than_base() -> None:
+    with pytest.raises(ValidationError, match="retry maximum"):
+        _settings(worker_retry_base_seconds=10, worker_retry_max_seconds=5)
+
+
 def test_analyzer_is_disabled_by_default_without_calling_adapter() -> None:
     analyzer = FakeAnalyzer()
     with _client(analyzer=analyzer) as client:

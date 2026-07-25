@@ -22,6 +22,5 @@ Transient media/network failure не должен требовать ручно�
 ## Последствия
 
 Worker обеспечивает bounded at-least-once execution и сохраняет exhausted
-записи для диагностики. Backoff пока отсутствует: retries возвращаются в конец
-FIFO-потока сразу. Классификация transient/permanent ошибок и delayed sorted-set
-queue остаются следующим улучшением.
+записи для диагностики. Delayed exponential backoff и
+transient/permanent-классификация добавлены последующим ADR 0018.

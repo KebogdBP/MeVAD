@@ -15,7 +15,15 @@ from mevad.exceptions import (
     InvalidJobTransitionError,
     JobNotFoundError,
 )
-from mevad.jobs import Job, JobClaim, JobQueue, JobService, JobStatus
+from mevad.jobs import (
+    Job,
+    JobClaim,
+    JobQueue,
+    JobService,
+    JobStatus,
+    RetryBackoff,
+    is_retryable_error,
+)
 from mevad.jobs.redis_queue import RedisJobQueue
 from mevad.jobs.sql_repository import SqlJobRepository
 from mevad_api.config import Settings
@@ -42,6 +50,7 @@ class WorkerRuntime:
         poll_timeout_seconds: int = 5,
         recovery_interval_seconds: int = 30,
         claim_stale_seconds: int = 120,
+        retry_backoff: RetryBackoff | None = None,
     ) -> None:
         self._queue = queue
         self._service = service
@@ -49,6 +58,7 @@ class WorkerRuntime:
         self._poll_timeout_seconds = poll_timeout_seconds
         self._recovery_interval_seconds = recovery_interval_seconds
         self._claim_stale_seconds = claim_stale_seconds
+        self._retry_backoff = retry_backoff or RetryBackoff()
         self._last_recovery = 0.0
 
     def recover(self) -> int:
@@ -66,9 +76,14 @@ class WorkerRuntime:
                 continue
             if expired.status is JobStatus.CANCELLED:
                 self._queue.acknowledge(claim)
-            elif expired.attempt_count < expired.max_attempts:
+            elif self._can_retry(expired):
                 self._service.retry(expired.job_id)
-                self._queue.retry(claim)
+                self._queue.retry(
+                    claim,
+                    delay_seconds=self._retry_backoff.delay_seconds(
+                        attempt_count=expired.attempt_count
+                    ),
+                )
             else:
                 self._queue.dead_letter(claim)
             recovered += 1
@@ -113,12 +128,14 @@ class WorkerRuntime:
         if result.status is not JobStatus.FAILED:
             self._queue.acknowledge(claim)
             return True
-        if result.attempt_count < result.max_attempts:
+        if self._can_retry(result):
             self._service.retry(claim.job_id)
-            self._queue.retry(claim)
+            delay_seconds = self._retry_backoff.delay_seconds(attempt_count=result.attempt_count)
+            self._queue.retry(claim, delay_seconds=delay_seconds)
             LOGGER.info(
-                "Retrying job %s after attempt %d of %d",
+                "Retrying job %s in %d seconds after attempt %d of %d",
                 claim.job_id,
+                delay_seconds,
                 result.attempt_count,
                 result.max_attempts,
             )
@@ -130,6 +147,10 @@ class WorkerRuntime:
                 result.attempt_count,
             )
         return True
+
+    @staticmethod
+    def _can_retry(job: Job) -> bool:
+        return job.attempt_count < job.max_attempts and is_retryable_error(job.error_code)
 
     def run_forever(self, stop_requested: Callable[[], bool]) -> None:
         recovered = self.recover()
@@ -168,6 +189,10 @@ def create_runtime(settings: Settings | None = None) -> WorkerRuntime:
         poll_timeout_seconds=selected.worker_poll_timeout_seconds,
         recovery_interval_seconds=selected.worker_recovery_interval_seconds,
         claim_stale_seconds=selected.worker_claim_stale_seconds,
+        retry_backoff=RetryBackoff(
+            base_seconds=selected.worker_retry_base_seconds,
+            max_seconds=selected.worker_retry_max_seconds,
+        ),
     )
 
 

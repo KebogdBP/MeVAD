@@ -101,8 +101,10 @@ Update использует optimistic concurrency. Несовпадение ver
 
 `SqlJobRepository` использует PostgreSQL transaction и row version.
 
-Failed job может вернуться в `queued`, пока `attempt_count < max_attempts`.
-После исчерпания попыток Redis claim переносится в dead-letter list.
+Transient failed job может вернуться в `queued`, пока
+`attempt_count < max_attempts`. Exact claim ждёт exponential backoff в Redis
+delayed sorted set. Permanent и exhausted failures сразу переносятся в
+dead-letter list; неизвестный error code считается permanent.
 
 Lease metadata остаётся internal и не входит в `JobResponse`. Heartbeat
 продлевает deadline только для текущего owner; expired jobs восстанавливаются
@@ -162,7 +164,7 @@ POST /api/v1/jobs/{job_id}/cancel
 
 Production Job System потребует:
 
-- retry backoff и error classification;
+- retry jitter;
 - TTL результата;
 - idempotency keys;
 - per-user quotas;

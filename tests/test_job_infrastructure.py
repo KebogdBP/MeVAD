@@ -24,6 +24,7 @@ class FakeRedis:
         self.ready: list[bytes] = []
         self.processing: list[bytes] = []
         self.dead: list[bytes] = []
+        self.delayed: dict[bytes, float] = {}
         self.fail = False
 
     def lpush(self, name: str, *values: str) -> int:
@@ -67,6 +68,28 @@ class FakeRedis:
     def eval(self, script: str, numkeys: int, *keys_and_args: str) -> object:
         self._check()
         assert script
+        if "ZRANGEBYSCORE" in script:
+            delayed, ready, now, limit = keys_and_args
+            assert (delayed, ready) == ("test:jobs:delayed", "test:jobs")
+            due = [payload for payload, score in self.delayed.items() if score <= float(now)][
+                : int(limit)
+            ]
+            for payload in due:
+                del self.delayed[payload]
+                self.ready.insert(0, payload)
+            return len(due)
+        if "ZADD" in script:
+            source, delayed, receipt, score, replacement = keys_and_args
+            assert (source, delayed) == (
+                "test:jobs:processing",
+                "test:jobs:delayed",
+            )
+            encoded = receipt.encode()
+            if encoded not in self.processing:
+                return 0
+            self.processing.remove(encoded)
+            self.delayed[replacement.encode()] = float(score)
+            return 1
         if numkeys == 1:
             source, receipt, replacement = keys_and_args
             assert source == "test:jobs:processing"
@@ -198,6 +221,28 @@ def test_redis_queue_retries_and_dead_letters_claims() -> None:
     assert retried.receipt != retry_claim.receipt
     assert client.dead == [dead_claim.receipt.encode()]
     queue.acknowledge(retried)
+
+
+def test_redis_queue_promotes_delayed_retry_when_due() -> None:
+    now = datetime(2026, 7, 25, 12, 0, tzinfo=UTC)
+    current = now
+    client = FakeRedis()
+    queue = RedisJobQueue(
+        client,
+        queue_name="test:jobs",
+        clock=lambda: current,
+    )
+    queue.enqueue("job-1")
+    claim = queue.dequeue(timeout_seconds=1)
+    assert claim is not None
+
+    queue.retry(claim, delay_seconds=5)
+    assert queue.dequeue(timeout_seconds=0) is None
+
+    current += timedelta(seconds=5)
+    retried = queue.dequeue(timeout_seconds=0)
+    assert retried is not None and retried.job_id == "job-1"
+    assert retried.receipt != claim.receipt
 
 
 def test_redis_queue_stale_receipt_cannot_acknowledge_retry() -> None:

@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     worker_heartbeat_seconds: int = Field(default=15, ge=1, le=300)
     worker_recovery_interval_seconds: int = Field(default=30, ge=5, le=600)
     worker_claim_stale_seconds: int = Field(default=120, ge=30, le=3600)
+    worker_retry_base_seconds: int = Field(default=5, ge=1, le=3600)
+    worker_retry_max_seconds: int = Field(default=300, ge=1, le=86400)
     job_max_attempts: int = Field(default=3, ge=1, le=10)
     storage_root: Path = Path("storage/jobs")
 
@@ -47,6 +49,8 @@ class Settings(BaseSettings):
     def validate_worker_lease_timing(self) -> "Settings":
         if self.worker_heartbeat_seconds >= self.worker_lease_seconds:
             raise ValueError("Worker heartbeat interval must be shorter than its lease.")
+        if self.worker_retry_max_seconds < self.worker_retry_base_seconds:
+            raise ValueError("Worker retry maximum must not be shorter than its base.")
         return self
 
 

@@ -7,8 +7,11 @@ from mevad.cutter import VideoCutter
 from mevad.downloader import CancellationToken, ProgressCallback, VideoDownloader
 from mevad.exceptions import (
     DownloadCancelledError,
+    MediaDownloadError,
     MediaProcessingError,
     MediaProcessTimeoutError,
+    MissingRuntimeToolError,
+    UnsupportedMediaError,
 )
 from mevad.jobs import InMemoryJobRepository, Job, JobOperation, JobService, JobStatus
 from mevad.loop_maker import LoopMaker
@@ -208,8 +211,8 @@ def test_invalid_worker_parameters_fail_safely(tmp_path: Path) -> None:
     failed = executor.execute(job.job_id)
 
     assert failed.status is JobStatus.FAILED
-    assert failed.error_code == "job_execution_failed"
-    assert failed.error_message == "The media job could not be completed."
+    assert failed.error_code == "job_invalid_parameters"
+    assert failed.error_message == "The media job parameters are invalid."
 
 
 def test_worker_persists_stable_timeout_error(tmp_path: Path) -> None:
@@ -238,6 +241,44 @@ def test_worker_persists_stable_timeout_error(tmp_path: Path) -> None:
     assert failed.status is JobStatus.FAILED
     assert failed.error_code == "job_timed_out"
     assert failed.error_message == "The media job exceeded its processing deadline."
+    assert "private" not in failed.error_message
+
+
+@pytest.mark.parametrize(
+    ("failure", "error_code"),
+    [
+        (MissingRuntimeToolError("private tool path"), "runtime_tool_missing"),
+        (UnsupportedMediaError("private extractor output"), "media_unsupported"),
+        (MediaDownloadError("private upstream error"), "job_execution_failed"),
+    ],
+)
+def test_worker_classifies_stable_failure_codes(
+    tmp_path: Path,
+    failure: Exception,
+    error_code: str,
+) -> None:
+    class FailingDownloader(FakeVideoDownloader):
+        def download(
+            self,
+            request: VideoDownloadRequest,
+            *,
+            on_progress: ProgressCallback | None = None,
+            cancellation: CancellationToken | None = None,
+        ) -> VideoDownloadResult:
+            raise failure
+
+    service, executor = _executor(tmp_path, video_downloader=FailingDownloader())
+    job = _create(
+        service,
+        JobOperation.DOWNLOAD_VIDEO,
+        {"quality": "720p", "container": "mp4"},
+    )
+
+    failed = executor.execute(job.job_id)
+
+    assert failed.status is JobStatus.FAILED
+    assert failed.error_code == error_code
+    assert failed.error_message is not None
     assert "private" not in failed.error_message
 
 

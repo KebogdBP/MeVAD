@@ -47,6 +47,24 @@ end
 return removed
 """
 
+_DELAY_CLAIM_SCRIPT = """
+local removed = redis.call('LREM', KEYS[1], 1, ARGV[1])
+if removed == 1 then
+    redis.call('ZADD', KEYS[2], ARGV[2], ARGV[3])
+end
+return removed
+"""
+
+_PROMOTE_DUE_SCRIPT = """
+local payloads = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', ARGV[1], 'LIMIT', 0, ARGV[2])
+for _, payload in ipairs(payloads) do
+    if redis.call('ZREM', KEYS[1], payload) == 1 then
+        redis.call('LPUSH', KEYS[2], payload)
+    end
+end
+return #payloads
+"""
+
 
 class RedisJobQueue:
     """FIFO queue built from Redis LPUSH/BRPOP."""
@@ -65,6 +83,7 @@ class RedisJobQueue:
         self._queue_name = queue_name
         self._processing_name = f"{queue_name}:processing"
         self._dead_letter_name = f"{queue_name}:dead"
+        self._delayed_name = f"{queue_name}:delayed"
         self._receipt_factory = receipt_factory or _new_receipt
         self._clock = clock or _utc_now
 
@@ -84,6 +103,14 @@ class RedisJobQueue:
         if timeout_seconds < 0:
             raise ValueError("Queue timeout cannot be negative.")
         try:
+            self._client.eval(
+                _PROMOTE_DUE_SCRIPT,
+                2,
+                self._delayed_name,
+                self._queue_name,
+                str(self._clock().timestamp()),
+                "100",
+            )
             item = self._client.brpoplpush(
                 self._queue_name,
                 self._processing_name,
@@ -120,11 +147,30 @@ class RedisJobQueue:
         if removed != 1:
             raise JobQueueError("Claimed job was not found in the processing queue.")
 
-    def retry(self, claim: JobClaim) -> None:
+    def retry(self, claim: JobClaim, *, delay_seconds: int = 0) -> None:
+        if delay_seconds < 0:
+            raise ValueError("Retry delay cannot be negative.")
+        replacement = self._new_payload(claim.job_id)
+        if delay_seconds:
+            try:
+                moved = self._client.eval(
+                    _DELAY_CLAIM_SCRIPT,
+                    2,
+                    self._processing_name,
+                    self._delayed_name,
+                    claim.receipt,
+                    str(self._clock().timestamp() + delay_seconds),
+                    replacement,
+                )
+            except RedisError as error:
+                raise JobQueueError("Could not delay the job retry.") from error
+            if moved != 1:
+                raise JobQueueError("Claimed job was not found in the processing queue.")
+            return
         self._move_claim(
             claim,
             self._queue_name,
-            replacement=self._new_payload(claim.job_id),
+            replacement=replacement,
             action="retry",
         )
 

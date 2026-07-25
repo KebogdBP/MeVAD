@@ -63,6 +63,7 @@ def test_worker_runtime_reports_empty_poll() -> None:
 
 
 def test_worker_runtime_requeues_failed_job_with_attempts_remaining() -> None:
+    current = datetime(2026, 7, 25, tzinfo=UTC)
     repository = InMemoryJobRepository()
     service = JobService(repository, job_id_factory=lambda: "job-1")
     service.create(
@@ -76,12 +77,13 @@ def test_worker_runtime_requeues_failed_job_with_attempts_remaining() -> None:
         error_code="job_execution_failed",
         error_message="The media job could not be completed.",
     )
-    queue = InMemoryJobQueue()
+    queue = InMemoryJobQueue(clock=lambda: current)
     queue.enqueue("job-1")
     runtime = WorkerRuntime(queue, service, FakeExecutor(failed), poll_timeout_seconds=0)
 
     assert runtime.run_once()
     assert service.get("job-1").status is JobStatus.QUEUED
+    current += timedelta(seconds=5)
     retried = queue.dequeue(timeout_seconds=0)
     assert retried is not None and retried.job_id == "job-1"
 
@@ -117,6 +119,35 @@ def test_worker_runtime_dead_letters_exhausted_job() -> None:
     assert runtime.run_once()
     assert queue.dead_letters == ("job-1",)
     assert service.get("job-1").status is JobStatus.FAILED
+
+
+def test_worker_runtime_dead_letters_permanent_failure_without_retry() -> None:
+    failed = Job(
+        job_id="job-1",
+        operation=JobOperation.DOWNLOAD_VIDEO,
+        source_url="https://example.com/video",
+        parameters={"quality": "invalid"},
+        status=JobStatus.FAILED,
+        progress_percent=0,
+        created_at=datetime(2026, 7, 25, tzinfo=UTC),
+        updated_at=datetime(2026, 7, 25, tzinfo=UTC),
+        version=2,
+        attempt_count=1,
+        max_attempts=3,
+        error_code="job_invalid_parameters",
+        error_message="The media job parameters are invalid.",
+    )
+    repository = InMemoryJobRepository()
+    repository.add(failed)
+    service = JobService(repository)
+    queue = InMemoryJobQueue()
+    queue.enqueue("job-1")
+    runtime = WorkerRuntime(queue, service, FakeExecutor(failed), poll_timeout_seconds=0)
+
+    assert runtime.run_once()
+    assert queue.dead_letters == ("job-1",)
+    assert service.get("job-1").status is JobStatus.FAILED
+    assert service.get("job-1").attempt_count == 1
 
 
 def test_worker_runtime_recovers_only_expired_leases() -> None:
@@ -157,7 +188,10 @@ def test_worker_runtime_recovers_only_expired_leases() -> None:
         lease_expires_at=now + timedelta(seconds=60),
     )
     receipts = iter(("expired-receipt", "retry-receipt"))
-    queue = InMemoryJobQueue(receipt_factory=lambda: next(receipts))
+    queue = InMemoryJobQueue(
+        receipt_factory=lambda: next(receipts),
+        clock=clock,
+    )
     queue.enqueue("expired")
     claimed = queue.dequeue(timeout_seconds=0)
     assert claimed is not None
@@ -192,6 +226,7 @@ def test_worker_runtime_recovers_only_expired_leases() -> None:
     assert service.get("expired").status is JobStatus.QUEUED
     assert service.get("expired").error_code is None
     assert service.get("active").status is JobStatus.RUNNING
+    current += timedelta(seconds=5)
     recovered = queue.dequeue(timeout_seconds=0)
     assert recovered is not None
     assert recovered.job_id == claimed.job_id

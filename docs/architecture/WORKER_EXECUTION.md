@@ -115,7 +115,7 @@ details.
 
 ## Ошибки
 
-Ожидаемые domain, parameter и processing errors преобразуются в:
+Transient domain/processing errors преобразуются в:
 
 ```text
 status: failed
@@ -133,6 +133,11 @@ error_code: job_timed_out
 error_message: The media job exceeded its processing deadline.
 ```
 
+Неверные job parameters, unsupported media и отсутствие runtime tool получают
+отдельные permanent codes. Runtime повторяет только allowlist transient codes;
+неизвестная ошибка считается permanent. Retry ждёт capped exponential backoff
+в Redis delayed sorted set, не блокируя worker process.
+
 `run_process` использует `Popen(start_new_session=True)`, polling cancellation и
 завершение process group через TERM→KILL. Worker video/audio adapters также
 запускают yt-dlp отдельной командой; embedded Python API остаётся только в
@@ -143,7 +148,7 @@ error_message: The media job exceeded its processing deadline.
 `SqlJobRepository`, `RedisJobQueue` и `WorkerRuntime` теперь связывают API и
 отдельный process. Следующий infrastructure layer требует:
 
-- retry backoff и permanent-error classification;
+- retry jitter;
 - storage TTL;
 - process-level resource limits;
 - network sandbox.

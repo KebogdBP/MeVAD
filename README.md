@@ -33,6 +33,7 @@
 - PostgreSQL worker leases, heartbeat и selective stale-job recovery.
 - unique Redis delivery receipts и stale-ack fencing.
 - timestamped Redis claim reaper для crash window до SQL lease.
+- delayed exponential retries и transient/permanent error classification.
 - отдельный worker process и локальный Docker Compose stack.
 
 Web-интерфейс ещё не реализован.
@@ -177,6 +178,9 @@ state, Redis переносит job identifiers, а API и worker использ
 после чего переносит exhausted claim в `mevad:jobs:dead`.
 Зависший claim без SQL lease автоматически возвращается в ready после
 `MEVAD_WORKER_CLAIM_STALE_SECONDS`.
+Transient failure ждёт неблокирующий exponential backoff между
+`MEVAD_WORKER_RETRY_BASE_SECONDS` и `MEVAD_WORKER_RETRY_MAX_SECONDS`;
+permanent failure сразу переносится в dead-letter.
 
 Для ручного запуска задайте `MEVAD_JOB_BACKEND=postgres`,
 `MEVAD_QUEUE_BACKEND=redis`, database/Redis URLs, затем запустите

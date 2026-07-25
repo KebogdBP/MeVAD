@@ -11,6 +11,8 @@ from mevad.exceptions import (
     DownloadCancelledError,
     MediaProcessTimeoutError,
     MeVADError,
+    MissingRuntimeToolError,
+    UnsupportedMediaError,
 )
 from mevad.jobs import Job, JobOperation, JobService, JobStatus
 from mevad.jobs.models import JobParameter
@@ -195,7 +197,25 @@ class JobExecutor:
                 error_code="job_timed_out",
                 error_message="The media job exceeded its processing deadline.",
             )
-        except (MeVADError, KeyError, TypeError, ValueError):
+        except MissingRuntimeToolError:
+            return self._fail_unless_cancelled(
+                job_id,
+                error_code="runtime_tool_missing",
+                error_message="A required media processing tool is unavailable.",
+            )
+        except UnsupportedMediaError:
+            return self._fail_unless_cancelled(
+                job_id,
+                error_code="media_unsupported",
+                error_message="The source media is not supported.",
+            )
+        except (KeyError, TypeError, ValueError):
+            return self._fail_unless_cancelled(
+                job_id,
+                error_code="job_invalid_parameters",
+                error_message="The media job parameters are invalid.",
+            )
+        except MeVADError:
             current = self._service.get(job_id)
             if current.status is JobStatus.CANCEL_REQUESTED:
                 return self._service.acknowledge_cancellation(job_id)
@@ -358,6 +378,22 @@ class JobExecutor:
             job_id,
             error_code="job_cancelled",
             error_message="The media operation was cancelled.",
+        )
+
+    def _fail_unless_cancelled(
+        self,
+        job_id: str,
+        *,
+        error_code: str,
+        error_message: str,
+    ) -> Job:
+        current = self._service.get(job_id)
+        if current.status is JobStatus.CANCEL_REQUESTED:
+            return self._service.acknowledge_cancellation(job_id)
+        return self._service.fail(
+            job_id,
+            error_code=error_code,
+            error_message=error_message,
         )
 
 

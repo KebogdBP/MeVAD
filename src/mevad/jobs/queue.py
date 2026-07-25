@@ -3,7 +3,7 @@
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from threading import Condition
 from typing import Protocol
 from uuid import uuid4
@@ -38,8 +38,8 @@ class JobQueue(Protocol):
         """Remove a successfully handled identifier from in-flight storage."""
         ...
 
-    def retry(self, claim: JobClaim) -> None:
-        """Move a claimed identifier back to the ready queue."""
+    def retry(self, claim: JobClaim, *, delay_seconds: int = 0) -> None:
+        """Move a claim to ready now or after a non-blocking delay."""
         ...
 
     def dead_letter(self, claim: JobClaim) -> None:
@@ -67,6 +67,7 @@ class InMemoryJobQueue:
         self._items: deque[JobClaim] = deque()
         self._processing: dict[str, JobClaim] = {}
         self._dead_letters: deque[JobClaim] = deque()
+        self._delayed: list[tuple[datetime, JobClaim]] = []
         self._condition = Condition()
         self._receipt_factory = receipt_factory or _new_receipt
         self._clock = clock or _utc_now
@@ -81,8 +82,10 @@ class InMemoryJobQueue:
         if timeout_seconds < 0:
             raise ValueError("Queue timeout cannot be negative.")
         with self._condition:
+            self._promote_due()
             if not self._items:
                 self._condition.wait(timeout_seconds)
+                self._promote_due()
             if not self._items:
                 return None
             queued = self._items.popleft()
@@ -97,9 +100,16 @@ class InMemoryJobQueue:
     def acknowledge(self, claim: JobClaim) -> None:
         self._remove_processing(claim)
 
-    def retry(self, claim: JobClaim) -> None:
+    def retry(self, claim: JobClaim, *, delay_seconds: int = 0) -> None:
+        if delay_seconds < 0:
+            raise ValueError("Retry delay cannot be negative.")
         self._remove_processing(claim)
-        self._items.append(JobClaim(job_id=claim.job_id, receipt=self._receipt_factory()))
+        replacement = JobClaim(job_id=claim.job_id, receipt=self._receipt_factory())
+        if delay_seconds == 0:
+            self._items.append(replacement)
+            return
+        available_at = self._clock() + timedelta(seconds=delay_seconds)
+        self._delayed.append((available_at, replacement))
 
     def dead_letter(self, claim: JobClaim) -> None:
         self._remove_processing(claim)
@@ -127,6 +137,16 @@ class InMemoryJobQueue:
         if current is None or current.job_id != claim.job_id:
             raise JobQueueError("Claimed job was not found in the processing queue.")
         del self._processing[claim.receipt]
+
+    def _promote_due(self) -> None:
+        now = self._clock()
+        pending: list[tuple[datetime, JobClaim]] = []
+        for available_at, claim in self._delayed:
+            if available_at <= now:
+                self._items.append(claim)
+            else:
+                pending.append((available_at, claim))
+        self._delayed = pending
 
 
 def _new_receipt() -> str:

@@ -42,11 +42,12 @@ PostgreSQL хранит полную модель задачи. Redis перен
 
 ## Redis delivery
 
-Очередь использует три Redis lists:
+Очередь использует три Redis lists и один sorted set:
 
 - `mevad:jobs` — ready;
 - `mevad:jobs:processing` — claimed, но ещё не acknowledged.
 - `mevad:jobs:dead` — exhausted after bounded retries.
+- `mevad:jobs:delayed` — retry deliveries с Unix timestamp доступности.
 
 Каждый ready payload содержит уникальный `delivery_id`. Worker получает
 `JobClaim`, а acknowledge/retry/dead-letter используют полный opaque receipt.
@@ -98,21 +99,26 @@ rolling upgrade. Новые публикации всегда использую
 ## Retry policy
 
 Job хранит `attempt_count` и `max_attempts`. Переход `queued → running`
-увеличивает attempt atomically вместе с version. Если executor возвращает
-`failed`:
+увеличивает attempt atomically вместе с version. Failed result сначала
+классифицируется по стабильному `error_code`:
 
 ```text
-attempt_count < max_attempts
+transient && attempt_count < max_attempts
     failed → queued
-    processing → ready
+    processing → delayed → ready
 
-attempt_count == max_attempts
+permanent || attempt_count == max_attempts
     processing → dead
 ```
 
-Перемещения claim выполняются Redis Lua script как одна операция. Настройка
-`MEVAD_JOB_MAX_ATTEMPTS` принимает значения 1–10 и применяется при создании
-новой задачи.
+Задержка растёт как capped exponential backoff. Перемещение exact claim в
+sorted set и promotion наступивших deliveries выполняются Redis Lua scripts.
+`MEVAD_JOB_MAX_ATTEMPTS` принимает значения 1–10.
+
+Настройки backoff:
+
+- `MEVAD_WORKER_RETRY_BASE_SECONDS` — первая задержка, default 5;
+- `MEVAD_WORKER_RETRY_MAX_SECONDS` — потолок, default 300.
 
 ## Ошибка публикации
 
@@ -138,7 +144,7 @@ Compose поднимает PostgreSQL, Redis с AOF, API и worker. API/worker �
 
 ## Следующие ограничения
 
-- retry backoff и transient/permanent error classification;
+- retry jitter;
 - transactional outbox;
 - migration runner;
 - result TTL/cleanup scheduler;
