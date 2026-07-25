@@ -14,11 +14,12 @@
 - проверка URL без сетевого доступа;
 - базовая защита от localhost и прямых private/reserved IP;
 - обнаружение FFmpeg и FFprobe;
-- CLI, тесты и автоматические quality gates.
+- CLI, тесты и автоматические quality gates;
 - Smart URL Analyzer через изолированный `yt-dlp` adapter;
 - нормализованные форматы, субтитры, playlist metadata и доступные действия.
+- single-video downloader с пресетами качества, контейнерами и progress events.
 
-Скачивание медиа ещё не реализовано.
+Извлечение аудио, обрезка и web API ещё не реализованы.
 
 ## Требования
 
@@ -59,6 +60,19 @@ mevad analyze "https://example.com/video"
 web endpoint до добавления сетевой изоляции и проверки всех DNS/redirect
 назначений.
 
+Скачивание одного видео:
+
+```bash
+mevad download-video "https://example.com/video" \
+  --quality 720p \
+  --container mp4 \
+  --output downloads
+```
+
+Доступные качества: `best`, `1080p`, `720p`, `480p`, `360p`. Контейнеры:
+`auto`, `mp4`, `mkv`, `webm`. Команда предназначена для локального CLI и
+наследует ограничения сетевой безопасности analyzer.
+
 ## Проверки
 
 ```bash
@@ -74,6 +88,7 @@ pytest --cov=mevad --cov-report=term-missing
 - [Phase 0 — Repository Audit and Cleanup](docs/product/PHASE_0_REPOSITORY_AUDIT_AND_CLEANUP.md)
 - [Initial Repository Audit](docs/audits/INITIAL_REPOSITORY_AUDIT.md)
 - [Smart URL Analyzer Architecture](docs/architecture/SMART_URL_ANALYZER.md)
+- [Video Downloader Architecture](docs/architecture/VIDEO_DOWNLOADER.md)
 
 ## Планируемая архитектура
 

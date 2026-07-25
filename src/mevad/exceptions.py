@@ -19,3 +19,11 @@ class MediaAnalysisError(MeVADError):
 
 class UnsupportedMediaError(MediaAnalysisError):
     """Raised when extracted metadata does not describe supported media."""
+
+
+class MediaDownloadError(MeVADError):
+    """Raised when a media download cannot be completed."""
+
+
+class DownloadCancelledError(MediaDownloadError):
+    """Raised when a download is cancelled by its caller."""

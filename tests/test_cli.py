@@ -1,12 +1,21 @@
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 import mevad.cli
 from mevad.cli import main
-from mevad.exceptions import MediaAnalysisError
-from mevad.models import MediaAnalysis, MediaSource, SourceKind
+from mevad.exceptions import MediaAnalysisError, MediaDownloadError
+from mevad.models import (
+    DownloadProgress,
+    DownloadStatus,
+    MediaAnalysis,
+    MediaSource,
+    SourceKind,
+    VideoDownloadRequest,
+    VideoDownloadResult,
+)
 
 
 def test_validate_url_command_prints_normalized_url(
@@ -73,3 +82,67 @@ def test_analyze_command_reports_domain_error(
 
     assert exit_code == 2
     assert "analysis error: failed to analyze" in capsys.readouterr().out
+
+
+def test_download_command_prints_progress_and_result(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class FakeDownloader:
+        def download(
+            self,
+            request: VideoDownloadRequest,
+            *,
+            on_progress: Any = None,
+        ) -> VideoDownloadResult:
+            assert request.output_directory == tmp_path
+            on_progress(
+                DownloadProgress(
+                    status=DownloadStatus.DOWNLOADING,
+                    downloaded_bytes=5,
+                    total_bytes=10,
+                )
+            )
+            return VideoDownloadResult(
+                media_id="video-1",
+                title="Example",
+                output_path=tmp_path / "video.mp4",
+                filesize_bytes=10,
+            )
+
+    monkeypatch.setattr(mevad.cli, "YtDlpVideoDownloader", FakeDownloader)
+
+    exit_code = main(
+        [
+            "download-video",
+            "https://example.com/video",
+            "--output",
+            str(tmp_path),
+            "--quality",
+            "720p",
+            "--container",
+            "mp4",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "downloading 50.0%" in output
+    assert '"media_id": "video-1"' in output
+
+
+def test_download_command_reports_domain_error(
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailingDownloader:
+        def download(self, request: VideoDownloadRequest, **_kwargs: Any) -> VideoDownloadResult:
+            raise MediaDownloadError(f"failed to download {request.source.value}")
+
+    monkeypatch.setattr(mevad.cli, "YtDlpVideoDownloader", FailingDownloader)
+
+    exit_code = main(["download-video", "https://example.com/video"])
+
+    assert exit_code == 2
+    assert "download error: failed to download" in capsys.readouterr().out
