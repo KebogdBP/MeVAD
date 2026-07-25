@@ -4,7 +4,8 @@ from pathlib import Path
 import pytest
 
 from mevad.adapters.ffmpeg_cutter import FFmpegVideoCutter
-from mevad.adapters.process import ProcessResult
+from mevad.adapters.process import PollCallback, ProcessResult
+from mevad.downloader import CancellationToken
 from mevad.exceptions import (
     DownloadCancelledError,
     InvalidClipIntervalError,
@@ -33,7 +34,14 @@ class FakeRunner:
         self.create_output = create_output
         self.calls: list[tuple[list[str], float]] = []
 
-    def __call__(self, arguments: Sequence[str], *, timeout: float) -> ProcessResult:
+    def __call__(
+        self,
+        arguments: Sequence[str],
+        *,
+        timeout: float,
+        cancellation: CancellationToken | None = None,
+        on_poll: PollCallback | None = None,
+    ) -> ProcessResult:
         self.calls.append((list(arguments), timeout))
         if arguments[0] == "ffprobe":
             return ProcessResult(returncode=0, stdout=self.duration, stderr="")

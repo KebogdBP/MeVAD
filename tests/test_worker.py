@@ -5,7 +5,11 @@ import pytest
 from mevad.audio import AudioExtractor
 from mevad.cutter import VideoCutter
 from mevad.downloader import CancellationToken, ProgressCallback, VideoDownloader
-from mevad.exceptions import DownloadCancelledError, MediaProcessingError
+from mevad.exceptions import (
+    DownloadCancelledError,
+    MediaProcessingError,
+    MediaProcessTimeoutError,
+)
 from mevad.jobs import InMemoryJobRepository, Job, JobOperation, JobService, JobStatus
 from mevad.loop_maker import LoopMaker
 from mevad.models import (
@@ -206,6 +210,35 @@ def test_invalid_worker_parameters_fail_safely(tmp_path: Path) -> None:
     assert failed.status is JobStatus.FAILED
     assert failed.error_code == "job_execution_failed"
     assert failed.error_message == "The media job could not be completed."
+
+
+def test_worker_persists_stable_timeout_error(tmp_path: Path) -> None:
+    class TimeoutDownloader(FakeVideoDownloader):
+        def download(
+            self,
+            request: VideoDownloadRequest,
+            *,
+            on_progress: ProgressCallback | None = None,
+            cancellation: CancellationToken | None = None,
+        ) -> VideoDownloadResult:
+            raise MediaProcessTimeoutError("private process details")
+
+    service, executor = _executor(
+        tmp_path,
+        video_downloader=TimeoutDownloader(),
+    )
+    job = _create(
+        service,
+        JobOperation.DOWNLOAD_VIDEO,
+        {"quality": "720p", "container": "mp4"},
+    )
+
+    failed = executor.execute(job.job_id)
+
+    assert failed.status is JobStatus.FAILED
+    assert failed.error_code == "job_timed_out"
+    assert failed.error_message == "The media job exceeded its processing deadline."
+    assert "private" not in failed.error_message
 
 
 def test_worker_acknowledges_concurrent_cancellation(tmp_path: Path) -> None:

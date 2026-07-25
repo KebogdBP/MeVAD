@@ -95,9 +95,11 @@ loop-ready клипом, а повторение выполняет player/UI.
 - stdin отключён;
 - перезапись запрещена;
 - обработка имеет timeout, зависящий от duration, width и FPS;
+- managed process group поддерживает немедленную отмену и TERM→KILL;
 - partial output удаляется при ошибке;
 - существующий final/temporary output не трогается;
 - результат публикуется через atomic `.part` rename.
 
-Текущий progress coarse-grained: `processing` и `completed`. Покадровый progress
-и немедленная отмена процесса появятся вместе с managed worker process runner.
+Текущий progress coarse-grained: `processing` и `completed`. Немедленная отмена
+уже поддерживается managed runner; покадровый progress потребует FFmpeg
+`-progress pipe`.

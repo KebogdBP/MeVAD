@@ -8,6 +8,7 @@ from mevad.cutter import VideoCutter
 from mevad.downloader import CancellationToken, VideoDownloader
 from mevad.exceptions import (
     DownloadCancelledError,
+    MediaProcessTimeoutError,
     MeVADError,
 )
 from mevad.jobs import Job, JobOperation, JobService, JobStatus
@@ -122,6 +123,15 @@ class JobExecutor:
             return self._service.succeed(job_id, result_reference=reference)
         except DownloadCancelledError:
             return self._finish_cancellation(job_id)
+        except MediaProcessTimeoutError:
+            current = self._service.get(job_id)
+            if current.status is JobStatus.CANCEL_REQUESTED:
+                return self._service.acknowledge_cancellation(job_id)
+            return self._service.fail(
+                job_id,
+                error_code="job_timed_out",
+                error_message="The media job exceeded its processing deadline.",
+            )
         except (MeVADError, KeyError, TypeError, ValueError):
             current = self._service.get(job_id)
             if current.status is JobStatus.CANCEL_REQUESTED:

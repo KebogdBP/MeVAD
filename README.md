@@ -27,6 +27,7 @@
 - PostgreSQL job repository с optimistic locking.
 - Redis queue с claim/ack и восстановлением in-flight задач.
 - bounded retries и Redis dead-letter queue.
+- managed FFmpeg subprocess cancellation и hard timeouts.
 - отдельный worker process и локальный Docker Compose stack.
 
 Web-интерфейс ещё не реализован.

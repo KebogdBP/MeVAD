@@ -68,6 +68,9 @@ FFmpeg использует input seeking с включённым по умол�
 - перезапись запрещена через `-n`;
 - stderr сокращается до последней строки и 500 символов;
 - FFprobe и FFmpeg имеют timeout;
+- FFmpeg запускается в отдельной process group;
+- cancellation опрашивается во время кодирования;
+- timeout/cancel выполняет TERM с последующим KILL fallback;
 - output filename строится приложением.
 
 ## Файловый lifecycle
@@ -86,9 +89,9 @@ temporary output не перезаписывается и не удаляетс�
 - `processing`;
 - `completed`.
 
-Cancellation проверяется до FFprobe, перед FFmpeg и после завершения процесса.
-Для немедленной отмены во время кодирования worker должен перейти на managed
-`Popen` process group; это будет частью Job System.
+Cancellation проверяется до FFprobe, перед FFmpeg, каждые 250 мс во время
+кодирования и после завершения процесса. Managed runner завершает всю process
+group, поэтому дочерние encoder-процессы не остаются orphan.
 
 ## Ограничения
 

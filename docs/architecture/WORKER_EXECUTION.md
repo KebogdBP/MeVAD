@@ -115,6 +115,19 @@ error_message: The media job could not be completed.
 
 Сырые stderr, URL credentials, cookies и upstream details в job не сохраняются.
 
+Managed FFmpeg deadline получает отдельный стабильный результат:
+
+```text
+status: failed
+error_code: job_timed_out
+error_message: The media job exceeded its processing deadline.
+```
+
+`run_process` использует `Popen(start_new_session=True)`, polling cancellation и
+завершение process group через TERM→KILL. Встроенные yt-dlp adapters пока
+остаются Python API calls с socket timeout и hook-based cancellation; hard
+overall timeout для них потребует отдельного subprocess adapter.
+
 ## Текущая граница
 
 `SqlJobRepository`, `RedisJobQueue` и `WorkerRuntime` теперь связывают API и

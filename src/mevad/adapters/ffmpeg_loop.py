@@ -80,6 +80,7 @@ class FFmpegLoopMaker(LoopMaker):
             process_result = self._runner(
                 arguments,
                 timeout=_processing_timeout(request),
+                cancellation=cancellation,
             )
         except MediaProcessingError:
             temporary_path.unlink(missing_ok=True)

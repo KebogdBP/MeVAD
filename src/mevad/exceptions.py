@@ -33,6 +33,10 @@ class MediaProcessingError(MeVADError):
     """Raised when local media processing cannot be completed."""
 
 
+class MediaProcessTimeoutError(MediaProcessingError):
+    """Raised when a managed media subprocess exceeds its deadline."""
+
+
 class InvalidClipIntervalError(MediaProcessingError, ValueError):
     """Raised when a requested clip interval is invalid."""
 

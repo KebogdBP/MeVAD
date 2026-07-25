@@ -81,7 +81,11 @@ class FFmpegVideoCutter(VideoCutter):
         )
         timeout = _processing_timeout(request)
         try:
-            result = self._runner(arguments, timeout=timeout)
+            result = self._runner(
+                arguments,
+                timeout=timeout,
+                cancellation=cancellation,
+            )
         except MediaProcessingError:
             temporary_path.unlink(missing_ok=True)
             raise
