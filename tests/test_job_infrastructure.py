@@ -7,7 +7,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
 from mevad.exceptions import ConcurrentJobUpdateError, JobQueueError
-from mevad.jobs import InMemoryJobQueue, Job, JobOperation, JobService, JobStatus
+from mevad.jobs import (
+    InMemoryJobQueue,
+    Job,
+    JobClaim,
+    JobOperation,
+    JobService,
+    JobStatus,
+)
 from mevad.jobs.redis_queue import RedisJobQueue
 from mevad.jobs.sql_repository import SqlJobRepository
 
@@ -61,14 +68,14 @@ class FakeRedis:
         self._check()
         assert script
         assert numkeys == 2
-        source, destination, job_id = keys_and_args
+        source, destination, receipt, replacement = keys_and_args
         assert source == "test:jobs:processing"
-        encoded = job_id.encode()
+        encoded = receipt.encode()
         if encoded not in self.processing:
             return 0
         self.processing.remove(encoded)
         target = self.ready if destination == "test:jobs" else self.dead
-        target.insert(0, encoded)
+        target.insert(0, replacement.encode())
         return 1
 
     def _check(self) -> None:
@@ -130,32 +137,82 @@ def test_sql_repository_rejects_duplicate_identifier(
 
 def test_redis_queue_claim_acknowledge_and_recovery() -> None:
     client = FakeRedis()
-    queue = RedisJobQueue(client, queue_name="test:jobs")
+    receipts = iter(("delivery-1", "delivery-2"))
+    queue = RedisJobQueue(
+        client,
+        queue_name="test:jobs",
+        receipt_factory=lambda: next(receipts),
+    )
 
     queue.enqueue("job-1")
     queue.enqueue("job-2")
 
-    assert queue.dequeue(timeout_seconds=1) == "job-1"
-    queue.acknowledge("job-1")
-    assert queue.dequeue(timeout_seconds=1) == "job-2"
+    first = queue.dequeue(timeout_seconds=1)
+    assert first is not None and first.job_id == "job-1"
+    queue.acknowledge(first)
+    second = queue.dequeue(timeout_seconds=1)
+    assert second is not None and second.job_id == "job-2"
     assert queue.recover_inflight() == 1
-    assert queue.dequeue(timeout_seconds=1) == "job-2"
+    recovered = queue.dequeue(timeout_seconds=1)
+    assert recovered == second
 
 
 def test_redis_queue_retries_and_dead_letters_claims() -> None:
     client = FakeRedis()
-    queue = RedisJobQueue(client, queue_name="test:jobs")
+    receipts = iter(("retry-delivery", "dead-delivery", "retry-delivery-2"))
+    queue = RedisJobQueue(
+        client,
+        queue_name="test:jobs",
+        receipt_factory=lambda: next(receipts),
+    )
     queue.enqueue("retry-job")
     queue.enqueue("dead-job")
 
-    assert queue.dequeue(timeout_seconds=1) == "retry-job"
-    queue.retry("retry-job")
-    assert queue.dequeue(timeout_seconds=1) == "dead-job"
-    queue.dead_letter("dead-job")
+    retry_claim = queue.dequeue(timeout_seconds=1)
+    assert retry_claim is not None and retry_claim.job_id == "retry-job"
+    queue.retry(retry_claim)
+    dead_claim = queue.dequeue(timeout_seconds=1)
+    assert dead_claim is not None and dead_claim.job_id == "dead-job"
+    queue.dead_letter(dead_claim)
 
-    assert queue.dequeue(timeout_seconds=1) == "retry-job"
-    assert client.dead == [b"dead-job"]
-    queue.acknowledge("retry-job")
+    retried = queue.dequeue(timeout_seconds=1)
+    assert retried is not None
+    assert retried.job_id == retry_claim.job_id
+    assert retried.receipt != retry_claim.receipt
+    assert client.dead == [dead_claim.receipt.encode()]
+    queue.acknowledge(retried)
+
+
+def test_redis_queue_stale_receipt_cannot_acknowledge_retry() -> None:
+    client = FakeRedis()
+    receipts = iter(("delivery-1", "delivery-2"))
+    queue = RedisJobQueue(
+        client,
+        queue_name="test:jobs",
+        receipt_factory=lambda: next(receipts),
+    )
+    queue.enqueue("job-1")
+    original = queue.dequeue(timeout_seconds=1)
+    assert original is not None
+    queue.retry(original)
+    retried = queue.dequeue(timeout_seconds=1)
+    assert retried is not None and retried.receipt != original.receipt
+
+    with pytest.raises(JobQueueError, match="not found"):
+        queue.acknowledge(original)
+
+    queue.acknowledge(retried)
+
+
+def test_redis_queue_reads_legacy_plain_job_identifier() -> None:
+    client = FakeRedis()
+    client.ready.append(b"legacy-job")
+    queue = RedisJobQueue(client, queue_name="test:jobs")
+
+    claim = queue.dequeue(timeout_seconds=1)
+
+    assert claim == JobClaim(job_id="legacy-job", receipt="legacy-job")
+    queue.acknowledge(claim)
 
 
 def test_redis_queue_maps_connection_errors() -> None:
@@ -170,9 +227,9 @@ def test_redis_queue_maps_connection_errors() -> None:
     with pytest.raises(JobQueueError):
         queue.recover_inflight()
     with pytest.raises(JobQueueError):
-        queue.retry("job-1")
+        queue.retry(JobClaim(job_id="job-1", receipt="receipt"))
     with pytest.raises(JobQueueError):
-        queue.dead_letter("job-1")
+        queue.dead_letter(JobClaim(job_id="job-1", receipt="receipt"))
 
 
 def test_service_publishes_created_job(sql_repository: SqlJobRepository) -> None:
@@ -185,7 +242,8 @@ def test_service_publishes_created_job(sql_repository: SqlJobRepository) -> None
         parameters={"quality": "720p"},
     )
 
-    assert queue.dequeue(timeout_seconds=0) == "job-1"
+    claim = queue.dequeue(timeout_seconds=0)
+    assert claim is not None and claim.job_id == "job-1"
 
 
 class FailingQueue(InMemoryJobQueue):

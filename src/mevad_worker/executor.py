@@ -161,10 +161,11 @@ class JobExecutor:
         self._lease_duration_seconds = lease_duration_seconds
         self._heartbeat_interval_seconds = heartbeat_interval_seconds
 
-    def execute(self, job_id: str) -> Job:
+    def execute(self, job_id: str, *, claim_receipt: str | None = None) -> Job:
         job = self._service.start(
             job_id,
             worker_id=self._worker_id,
+            claim_receipt=claim_receipt,
             lease_duration_seconds=self._lease_duration_seconds,
         )
         heartbeat = LeaseHeartbeat(

@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     max_attempts INTEGER NOT NULL DEFAULT 3 CHECK (max_attempts BETWEEN 1 AND 10),
     lease_owner VARCHAR(128),
     lease_expires_at TIMESTAMP WITH TIME ZONE,
+    claim_receipt TEXT,
     result_reference TEXT,
     error_code VARCHAR(64),
     error_message TEXT

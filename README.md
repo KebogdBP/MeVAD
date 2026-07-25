@@ -31,6 +31,7 @@
 - изолированный yt-dlp worker subprocess для video/audio jobs.
 - streaming download progress через bounded machine protocol.
 - PostgreSQL worker leases, heartbeat и selective stale-job recovery.
+- unique Redis delivery receipts и stale-ack fencing.
 - отдельный worker process и локальный Docker Compose stack.
 
 Web-интерфейс ещё не реализован.

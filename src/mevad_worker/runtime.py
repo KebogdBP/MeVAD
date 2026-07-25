@@ -14,7 +14,7 @@ from mevad.exceptions import (
     InvalidJobTransitionError,
     JobNotFoundError,
 )
-from mevad.jobs import Job, JobQueue, JobService, JobStatus
+from mevad.jobs import Job, JobClaim, JobQueue, JobService, JobStatus
 from mevad.jobs.redis_queue import RedisJobQueue
 from mevad.jobs.sql_repository import SqlJobRepository
 from mevad_api.config import Settings
@@ -24,7 +24,7 @@ LOGGER = logging.getLogger("mevad.worker")
 
 
 class JobRunner(Protocol):
-    def execute(self, job_id: str) -> Job:
+    def execute(self, job_id: str, *, claim_receipt: str | None = None) -> Job:
         """Execute one claimed job."""
         ...
 
@@ -51,17 +51,23 @@ class WorkerRuntime:
     def recover(self) -> int:
         recovered = 0
         for candidate in self._service.find_expired():
+            if candidate.claim_receipt is None:
+                continue
+            claim = JobClaim(
+                job_id=candidate.job_id,
+                receipt=candidate.claim_receipt,
+            )
             try:
                 expired = self._service.expire_lease(candidate.job_id)
             except (ConcurrentJobUpdateError, InvalidJobTransitionError):
                 continue
             if expired.status is JobStatus.CANCELLED:
-                self._queue.acknowledge(expired.job_id)
+                self._queue.acknowledge(claim)
             elif expired.attempt_count < expired.max_attempts:
                 self._service.retry(expired.job_id)
-                self._queue.retry(expired.job_id)
+                self._queue.retry(claim)
             else:
-                self._queue.dead_letter(expired.job_id)
+                self._queue.dead_letter(claim)
             recovered += 1
         self._last_recovery = monotonic()
         return recovered
@@ -69,32 +75,35 @@ class WorkerRuntime:
     def run_once(self) -> bool:
         if monotonic() - self._last_recovery >= self._recovery_interval_seconds:
             self.recover()
-        job_id = self._queue.dequeue(timeout_seconds=self._poll_timeout_seconds)
-        if job_id is None:
+        claim = self._queue.dequeue(timeout_seconds=self._poll_timeout_seconds)
+        if claim is None:
             return False
         try:
-            result = self._executor.execute(job_id)
+            result = self._executor.execute(
+                claim.job_id,
+                claim_receipt=claim.receipt,
+            )
         except (InvalidJobTransitionError, JobNotFoundError):
-            LOGGER.warning("Discarding stale queue entry for job %s", job_id)
-            self._queue.acknowledge(job_id)
+            LOGGER.warning("Discarding stale queue entry for job %s", claim.job_id)
+            self._queue.acknowledge(claim)
             return True
         if result.status is not JobStatus.FAILED:
-            self._queue.acknowledge(job_id)
+            self._queue.acknowledge(claim)
             return True
         if result.attempt_count < result.max_attempts:
-            self._service.retry(job_id)
-            self._queue.retry(job_id)
+            self._service.retry(claim.job_id)
+            self._queue.retry(claim)
             LOGGER.info(
                 "Retrying job %s after attempt %d of %d",
-                job_id,
+                claim.job_id,
                 result.attempt_count,
                 result.max_attempts,
             )
         else:
-            self._queue.dead_letter(job_id)
+            self._queue.dead_letter(claim)
             LOGGER.warning(
                 "Dead-lettered job %s after %d attempts",
-                job_id,
+                claim.job_id,
                 result.attempt_count,
             )
         return True

@@ -42,6 +42,7 @@ jobs_table = Table(
     Column("max_attempts", Integer, nullable=False),
     Column("lease_owner", String(128)),
     Column("lease_expires_at", DateTime(timezone=True), index=True),
+    Column("claim_receipt", Text),
     Column("result_reference", Text),
     Column("error_code", String(64)),
     Column("error_message", Text),
@@ -137,6 +138,7 @@ def _to_record(job: Job) -> dict[str, Any]:
         "max_attempts": job.max_attempts,
         "lease_owner": job.lease_owner,
         "lease_expires_at": job.lease_expires_at,
+        "claim_receipt": job.claim_receipt,
         "result_reference": job.result_reference,
         "error_code": job.error_code,
         "error_message": job.error_message,
@@ -163,6 +165,7 @@ def _from_record(record: dict[str, Any]) -> Job:
         lease_expires_at=(
             _as_utc(record["lease_expires_at"]) if record["lease_expires_at"] is not None else None
         ),
+        claim_receipt=_optional_string(record["claim_receipt"]),
         result_reference=_optional_string(record["result_reference"]),
         error_code=_optional_string(record["error_code"]),
         error_message=_optional_string(record["error_message"]),

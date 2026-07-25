@@ -1,11 +1,15 @@
 """Redis-backed job queue adapter."""
 
+import json
+from collections.abc import Callable
 from typing import Protocol, cast
+from uuid import uuid4
 
 from redis import Redis
 from redis.exceptions import RedisError
 
 from mevad.exceptions import JobQueueError
+from mevad.jobs.queue import JobClaim
 
 
 class RedisListClient(Protocol):
@@ -27,7 +31,7 @@ class RedisListClient(Protocol):
 _MOVE_CLAIM_SCRIPT = """
 local removed = redis.call('LREM', KEYS[1], 1, ARGV[1])
 if removed == 1 then
-    redis.call('LPUSH', KEYS[2], ARGV[1])
+    redis.call('LPUSH', KEYS[2], ARGV[2])
 end
 return removed
 """
@@ -36,13 +40,20 @@ return removed
 class RedisJobQueue:
     """FIFO queue built from Redis LPUSH/BRPOP."""
 
-    def __init__(self, client: RedisListClient, *, queue_name: str = "mevad:jobs") -> None:
+    def __init__(
+        self,
+        client: RedisListClient,
+        *,
+        queue_name: str = "mevad:jobs",
+        receipt_factory: Callable[[], str] | None = None,
+    ) -> None:
         if not queue_name:
             raise ValueError("Redis queue name cannot be empty.")
         self._client = client
         self._queue_name = queue_name
         self._processing_name = f"{queue_name}:processing"
         self._dead_letter_name = f"{queue_name}:dead"
+        self._receipt_factory = receipt_factory or _new_receipt
 
     @classmethod
     def from_url(cls, redis_url: str, *, queue_name: str = "mevad:jobs") -> "RedisJobQueue":
@@ -50,12 +61,13 @@ class RedisJobQueue:
         return cls(client, queue_name=queue_name)
 
     def enqueue(self, job_id: str) -> None:
+        payload = self._new_payload(job_id)
         try:
-            self._client.lpush(self._queue_name, job_id)
+            self._client.lpush(self._queue_name, payload)
         except RedisError as error:
             raise JobQueueError("Could not publish the job.") from error
 
-    def dequeue(self, *, timeout_seconds: int) -> str | None:
+    def dequeue(self, *, timeout_seconds: int) -> JobClaim | None:
         if timeout_seconds < 0:
             raise ValueError("Queue timeout cannot be negative.")
         try:
@@ -69,23 +81,34 @@ class RedisJobQueue:
         if item is None:
             return None
         try:
-            return item.decode("utf-8")
+            payload = item.decode("utf-8")
         except UnicodeDecodeError as error:
             raise JobQueueError("Queue payload is not valid UTF-8.") from error
+        return _decode_claim(payload)
 
-    def acknowledge(self, job_id: str) -> None:
+    def acknowledge(self, claim: JobClaim) -> None:
         try:
-            removed = self._client.lrem(self._processing_name, 1, job_id)
+            removed = self._client.lrem(self._processing_name, 1, claim.receipt)
         except RedisError as error:
             raise JobQueueError("Could not acknowledge the job.") from error
         if removed != 1:
             raise JobQueueError("Claimed job was not found in the processing queue.")
 
-    def retry(self, job_id: str) -> None:
-        self._move_claim(job_id, self._queue_name, action="retry")
+    def retry(self, claim: JobClaim) -> None:
+        self._move_claim(
+            claim,
+            self._queue_name,
+            replacement=self._new_payload(claim.job_id),
+            action="retry",
+        )
 
-    def dead_letter(self, job_id: str) -> None:
-        self._move_claim(job_id, self._dead_letter_name, action="dead-letter")
+    def dead_letter(self, claim: JobClaim) -> None:
+        self._move_claim(
+            claim,
+            self._dead_letter_name,
+            replacement=claim.receipt,
+            action="dead-letter",
+        )
 
     def recover_inflight(self) -> int:
         try:
@@ -98,16 +121,54 @@ class RedisJobQueue:
         except RedisError as error:
             raise JobQueueError("Could not recover in-flight jobs.") from error
 
-    def _move_claim(self, job_id: str, destination: str, *, action: str) -> None:
+    def _move_claim(
+        self,
+        claim: JobClaim,
+        destination: str,
+        *,
+        replacement: str,
+        action: str,
+    ) -> None:
         try:
             moved = self._client.eval(
                 _MOVE_CLAIM_SCRIPT,
                 2,
                 self._processing_name,
                 destination,
-                job_id,
+                claim.receipt,
+                replacement,
             )
         except RedisError as error:
             raise JobQueueError(f"Could not {action} the job.") from error
         if moved != 1:
             raise JobQueueError("Claimed job was not found in the processing queue.")
+
+    def _new_payload(self, job_id: str) -> str:
+        return json.dumps(
+            {
+                "delivery_id": self._receipt_factory(),
+                "job_id": job_id,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+
+
+def _decode_claim(payload: str) -> JobClaim:
+    try:
+        decoded = json.loads(payload)
+    except json.JSONDecodeError:
+        return JobClaim(job_id=payload, receipt=payload)
+    if not isinstance(decoded, dict):
+        raise JobQueueError("Queue payload has an invalid structure.")
+    job_id = decoded.get("job_id")
+    delivery_id = decoded.get("delivery_id")
+    if not isinstance(job_id, str) or not job_id:
+        raise JobQueueError("Queue payload has no valid job identifier.")
+    if not isinstance(delivery_id, str) or not delivery_id:
+        raise JobQueueError("Queue payload has no valid delivery identifier.")
+    return JobClaim(job_id=job_id, receipt=payload)
+
+
+def _new_receipt() -> str:
+    return uuid4().hex

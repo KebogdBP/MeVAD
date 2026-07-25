@@ -48,6 +48,11 @@ PostgreSQL хранит полную модель задачи. Redis перен
 - `mevad:jobs:processing` — claimed, но ещё не acknowledged.
 - `mevad:jobs:dead` — exhausted after bounded retries.
 
+Каждый ready payload содержит уникальный `delivery_id`. Worker получает
+`JobClaim`, а acknowledge/retry/dead-letter используют полный opaque receipt.
+Retry создаёт новый receipt атомарно с перемещением обратно в ready, поэтому
+старый worker не может удалить delivery новой попытки.
+
 `BRPOPLPUSH` одновременно забирает oldest ready item и сохраняет его в
 processing. После завершения worker вызывает `LREM`. При restart runtime
 возвращает оставшиеся processing entries в ready.
@@ -62,6 +67,7 @@ processing. После завершения worker вызывает `LREM`. Пр
 ```text
 lease_owner
 lease_expires_at
+claim_receipt
 ```
 
 Managed subprocess polling и progress callbacks продлевают deadline с
@@ -79,6 +85,9 @@ Expired running/processing job получает безопасный `worker_lea
 - `MEVAD_WORKER_HEARTBEAT_SECONDS`;
 - `MEVAD_WORKER_RECOVERY_INTERVAL_SECONDS`;
 - опциональный `MEVAD_WORKER_ID`.
+
+Legacy queue entries, содержащие только `job_id`, остаются читаемыми во время
+rolling upgrade. Новые публикации всегда используют JSON payload с delivery ID.
 
 ## Retry policy
 
@@ -123,7 +132,7 @@ Compose поднимает PostgreSQL, Redis с AOF, API и worker. API/worker �
 
 ## Следующие ограничения
 
-- claim-to-lease gap recovery;
+- timestamped recovery для claim-to-lease gap;
 - retry backoff и transient/permanent error classification;
 - transactional outbox;
 - migration runner;

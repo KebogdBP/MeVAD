@@ -133,6 +133,7 @@ def test_worker_lease_heartbeat_and_terminal_cleanup() -> None:
     running = service.start(
         job.job_id,
         worker_id="worker-1",
+        claim_receipt="receipt-1",
         lease_duration_seconds=60,
     )
     original_deadline = running.lease_expires_at
@@ -143,6 +144,7 @@ def test_worker_lease_heartbeat_and_terminal_cleanup() -> None:
     )
 
     assert running.lease_owner == "worker-1"
+    assert running.claim_receipt == "receipt-1"
     assert original_deadline is not None
     assert heartbeat.lease_expires_at is not None
     assert heartbeat.lease_expires_at > original_deadline
@@ -157,6 +159,7 @@ def test_worker_lease_heartbeat_and_terminal_cleanup() -> None:
     succeeded = service.succeed(job.job_id, result_reference="result.mp4")
     assert succeeded.lease_owner is None
     assert succeeded.lease_expires_at is None
+    assert succeeded.claim_receipt is None
 
 
 def test_expired_lease_is_found_and_failed_safely() -> None:

@@ -73,6 +73,7 @@ acknowledgement.
 - monotonic version;
 - attempt count и immutable max attempts;
 - internal worker lease owner/deadline;
+- internal exact broker claim receipt;
 - result reference;
 - safe error code/message.
 
@@ -106,6 +107,9 @@ Failed job может вернуться в `queued`, пока `attempt_count < 
 Lease metadata остаётся internal и не входит в `JobResponse`. Heartbeat
 продлевает deadline только для текущего owner; expired jobs восстанавливаются
 selective SQL query, а не глобальным replay processing queue.
+
+Receipt меняется при каждом retry и служит fencing token для Redis list
+operations. API его не публикует.
 
 ## HTTP API
 
@@ -152,7 +156,7 @@ POST /api/v1/jobs/{job_id}/cancel
 
 Production Job System потребует:
 
-- claim-to-lease gap recovery;
+- timestamped claim-to-lease gap recovery;
 - retry backoff и error classification;
 - stale-job recovery;
 - TTL результата;

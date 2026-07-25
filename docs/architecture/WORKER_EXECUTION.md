@@ -106,6 +106,9 @@ Managed yt-dlp передаёт downloaded bytes, total/estimated bytes, speed �
 Тот же polling вызывает throttled PostgreSQL heartbeat. Поэтому download,
 FFmpeg и postprocessing продлевают worker lease даже между progress events.
 
+Executor сохраняет opaque broker receipt вместе с lease. Runtime подтверждает
+только этот exact delivery; retry получает новый receipt.
+
 Если внешняя операция завершилась ошибкой одновременно с cancel request,
 executor предпочитает cancellation acknowledgement, не раскрывая внутренние
 details.
@@ -140,7 +143,7 @@ error_message: The media job exceeded its processing deadline.
 `SqlJobRepository`, `RedisJobQueue` и `WorkerRuntime` теперь связывают API и
 отдельный process. Следующий infrastructure layer требует:
 
-- recovery узкого окна до создания lease;
+- timestamped recovery узкого окна до создания lease;
 - retry backoff и permanent-error classification;
 - recovery зависших running jobs;
 - storage TTL;

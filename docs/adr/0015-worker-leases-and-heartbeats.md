@@ -24,6 +24,6 @@ Redis processing list показывает, что message был claimed, но 
 
 ## Последствия
 
-Несколько workers могут безопасно разделять PostgreSQL/Redis без глобального
-startup replay. Остаётся узкое окно между Redis claim и созданием SQL lease;
-его закроет broker claim timestamp или transactional dispatch/outbox.
+Несколько workers используют selective recovery без глобального startup replay.
+Unique receipts отдельно fence stale acknowledgements. Остаётся узкое окно
+между Redis claim и созданием SQL lease; его закроет broker claim timestamp.

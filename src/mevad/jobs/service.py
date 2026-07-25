@@ -91,6 +91,7 @@ class JobService:
         job_id: str,
         *,
         worker_id: str | None = None,
+        claim_receipt: str | None = None,
         lease_duration_seconds: int = 60,
     ) -> Job:
         job = self.get(job_id)
@@ -100,12 +101,15 @@ class JobService:
             _validate_worker_id(worker_id)
             _validate_lease_duration(lease_duration_seconds)
             lease_expires_at = self._clock() + timedelta(seconds=lease_duration_seconds)
+        if claim_receipt is not None and not 1 <= len(claim_receipt) <= 4096:
+            raise ValueError("Claim receipt must be between 1 and 4096 characters.")
         return self._transition(
             job,
             status=JobStatus.RUNNING,
             attempt_count=job.attempt_count + 1,
             lease_owner=worker_id,
             lease_expires_at=lease_expires_at,
+            claim_receipt=claim_receipt,
         )
 
     def heartbeat(
@@ -179,6 +183,7 @@ class JobService:
             error_message=None,
             lease_owner=None,
             lease_expires_at=None,
+            claim_receipt=None,
             updated_at=self._clock(),
             version=job.version + 1,
         )
@@ -242,6 +247,7 @@ class JobService:
         attempt_count: int | None = None,
         lease_owner: str | None = None,
         lease_expires_at: datetime | None = None,
+        claim_receipt: str | None = None,
         clear_lease: bool = False,
         result_reference: str | None = None,
         error_code: str | None = None,
@@ -260,6 +266,7 @@ class JobService:
                 if clear_lease
                 else (lease_expires_at if lease_expires_at is not None else job.lease_expires_at)
             ),
+            claim_receipt=(None if clear_lease else (claim_receipt or job.claim_receipt)),
             result_reference=(
                 result_reference if result_reference is not None else job.result_reference
             ),

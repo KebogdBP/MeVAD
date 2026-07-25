@@ -4,6 +4,7 @@ from mevad.jobs import (
     InMemoryJobQueue,
     InMemoryJobRepository,
     Job,
+    JobClaim,
     JobOperation,
     JobService,
     JobStatus,
@@ -15,9 +16,11 @@ class FakeExecutor:
     def __init__(self, result: Job) -> None:
         self.result = result
         self.calls: list[str] = []
+        self.receipts: list[str | None] = []
 
-    def execute(self, job_id: str) -> Job:
+    def execute(self, job_id: str, *, claim_receipt: str | None = None) -> Job:
         self.calls.append(job_id)
+        self.receipts.append(claim_receipt)
         return self.result
 
 
@@ -26,8 +29,9 @@ class RecordingQueue(InMemoryJobQueue):
         super().__init__()
         self.acknowledged: list[str] = []
 
-    def acknowledge(self, job_id: str) -> None:
-        self.acknowledged.append(job_id)
+    def acknowledge(self, claim: JobClaim) -> None:
+        super().acknowledge(claim)
+        self.acknowledged.append(claim.job_id)
 
 
 def test_worker_runtime_executes_and_acknowledges() -> None:
@@ -43,6 +47,7 @@ def test_worker_runtime_executes_and_acknowledges() -> None:
 
     assert runtime.run_once()
     assert executor.calls == ["job-1"]
+    assert executor.receipts[0] is not None
     assert queue.acknowledged == ["job-1"]
 
 
@@ -77,7 +82,8 @@ def test_worker_runtime_requeues_failed_job_with_attempts_remaining() -> None:
 
     assert runtime.run_once()
     assert service.get("job-1").status is JobStatus.QUEUED
-    assert queue.dequeue(timeout_seconds=0) == "job-1"
+    retried = queue.dequeue(timeout_seconds=0)
+    assert retried is not None and retried.job_id == "job-1"
 
 
 def test_worker_runtime_dead_letters_exhausted_job() -> None:
@@ -120,7 +126,6 @@ def test_worker_runtime_recovers_only_expired_leases() -> None:
     def clock() -> datetime:
         return current
 
-    repository = InMemoryJobRepository()
     expired = Job(
         job_id="expired",
         operation=JobOperation.DOWNLOAD_VIDEO,
@@ -151,10 +156,31 @@ def test_worker_runtime_recovers_only_expired_leases() -> None:
         lease_owner="live-worker",
         lease_expires_at=now + timedelta(seconds=60),
     )
+    receipts = iter(("expired-receipt", "retry-receipt"))
+    queue = InMemoryJobQueue(receipt_factory=lambda: next(receipts))
+    queue.enqueue("expired")
+    claimed = queue.dequeue(timeout_seconds=0)
+    assert claimed is not None
+    expired = Job(
+        job_id=expired.job_id,
+        operation=expired.operation,
+        source_url=expired.source_url,
+        parameters=expired.parameters,
+        status=expired.status,
+        progress_percent=expired.progress_percent,
+        created_at=expired.created_at,
+        updated_at=expired.updated_at,
+        version=expired.version,
+        attempt_count=expired.attempt_count,
+        max_attempts=expired.max_attempts,
+        lease_owner=expired.lease_owner,
+        lease_expires_at=expired.lease_expires_at,
+        claim_receipt=claimed.receipt,
+    )
+    repository = InMemoryJobRepository()
     repository.add(expired)
     repository.add(active)
     service = JobService(repository, clock=clock)
-    queue = InMemoryJobQueue()
     runtime = WorkerRuntime(
         queue,
         service,
@@ -166,7 +192,10 @@ def test_worker_runtime_recovers_only_expired_leases() -> None:
     assert service.get("expired").status is JobStatus.QUEUED
     assert service.get("expired").error_code is None
     assert service.get("active").status is JobStatus.RUNNING
-    assert queue.dequeue(timeout_seconds=0) == "expired"
+    recovered = queue.dequeue(timeout_seconds=0)
+    assert recovered is not None
+    assert recovered.job_id == claimed.job_id
+    assert recovered.receipt != claimed.receipt
 
 
 def _job() -> Job:

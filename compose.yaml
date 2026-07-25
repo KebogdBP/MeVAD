@@ -15,6 +15,7 @@ services:
       - ./migrations/0001_create_jobs.sql:/docker-entrypoint-initdb.d/0001_create_jobs.sql:ro
       - ./migrations/0002_add_job_attempts.sql:/docker-entrypoint-initdb.d/0002_add_job_attempts.sql:ro
       - ./migrations/0003_add_job_leases.sql:/docker-entrypoint-initdb.d/0003_add_job_leases.sql:ro
+      - ./migrations/0004_add_claim_receipts.sql:/docker-entrypoint-initdb.d/0004_add_claim_receipts.sql:ro
 
   redis:
     image: redis:8-alpine
