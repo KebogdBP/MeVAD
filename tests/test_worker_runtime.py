@@ -198,6 +198,87 @@ def test_worker_runtime_recovers_only_expired_leases() -> None:
     assert recovered.receipt != claimed.receipt
 
 
+def test_worker_runtime_requeues_stale_claim_without_lease() -> None:
+    claimed_at = datetime.now(UTC) - timedelta(minutes=10)
+    receipts = iter(("first-receipt", "retry-receipt"))
+    queue = InMemoryJobQueue(
+        receipt_factory=lambda: next(receipts),
+        clock=lambda: claimed_at,
+    )
+    repository = InMemoryJobRepository()
+    service = JobService(repository, job_id_factory=lambda: "job-1")
+    service.create(
+        operation=JobOperation.DOWNLOAD_VIDEO,
+        source_url="https://example.com/video",
+        parameters={"quality": "best"},
+    )
+    queue.enqueue("job-1")
+    abandoned = queue.dequeue(timeout_seconds=0)
+    assert abandoned is not None
+
+    runtime = WorkerRuntime(
+        queue,
+        service,
+        FakeExecutor(_job()),
+        poll_timeout_seconds=0,
+        claim_stale_seconds=120,
+    )
+
+    assert runtime.recover() == 1
+    recovered = queue.dequeue(timeout_seconds=0)
+    assert recovered is not None
+    assert recovered.job_id == abandoned.job_id
+    assert recovered.receipt != abandoned.receipt
+    assert service.get("job-1").status is JobStatus.QUEUED
+
+
+def test_worker_runtime_keeps_recent_unleased_claim() -> None:
+    queue = InMemoryJobQueue(clock=lambda: datetime.now(UTC))
+    repository = InMemoryJobRepository()
+    service = JobService(repository, job_id_factory=lambda: "job-1")
+    service.create(
+        operation=JobOperation.DOWNLOAD_VIDEO,
+        source_url="https://example.com/video",
+        parameters={"quality": "best"},
+    )
+    queue.enqueue("job-1")
+    claim = queue.dequeue(timeout_seconds=0)
+    assert claim is not None
+
+    runtime = WorkerRuntime(
+        queue,
+        service,
+        FakeExecutor(_job()),
+        poll_timeout_seconds=0,
+        claim_stale_seconds=120,
+    )
+
+    assert runtime.recover() == 0
+    assert queue.find_stale(before=datetime.now(UTC)) == (claim,)
+
+
+def test_worker_runtime_discards_stale_claim_for_terminal_job() -> None:
+    claimed_at = datetime.now(UTC) - timedelta(minutes=10)
+    queue = InMemoryJobQueue(clock=lambda: claimed_at)
+    repository = InMemoryJobRepository()
+    repository.add(_job())
+    service = JobService(repository)
+    queue.enqueue("job-1")
+    claim = queue.dequeue(timeout_seconds=0)
+    assert claim is not None
+
+    runtime = WorkerRuntime(
+        queue,
+        service,
+        FakeExecutor(_job()),
+        poll_timeout_seconds=0,
+        claim_stale_seconds=120,
+    )
+
+    assert runtime.recover() == 1
+    assert queue.find_stale(before=datetime.now(UTC)) == ()
+
+
 def _job() -> Job:
     now = datetime(2026, 7, 25, tzinfo=UTC)
     return Job(

@@ -54,8 +54,8 @@ Retry создаёт новый receipt атомарно с перемещени
 старый worker не может удалить delivery новой попытки.
 
 `BRPOPLPUSH` одновременно забирает oldest ready item и сохраняет его в
-processing. После завершения worker вызывает `LREM`. При restart runtime
-возвращает оставшиеся processing entries в ready.
+processing. Сразу после claim payload атомарно заменяется версией с
+`claimed_at`. После завершения worker вызывает `LREM`.
 
 Это at-least-once delivery. PostgreSQL lease отделяет abandoned claim от
 активной работы другого worker.
@@ -79,11 +79,17 @@ Expired running/processing job получает безопасный `worker_lea
 обычная retry policy возвращает его в ready либо переносит в dead-letter.
 `cancel_requested` с истёкшей lease завершается как `cancelled`.
 
+Тот же recovery cycle выбирает Redis claims старше grace period. Claim
+возвращается в ready только если SQL job всё ещё `queued` и не успела получить
+lease receipt. Terminal/missing jobs и claims, вытесненные другой lease,
+очищаются. Активные совпадающие leases reaper не затрагивает.
+
 Настройки:
 
 - `MEVAD_WORKER_LEASE_SECONDS`;
 - `MEVAD_WORKER_HEARTBEAT_SECONDS`;
 - `MEVAD_WORKER_RECOVERY_INTERVAL_SECONDS`;
+- `MEVAD_WORKER_CLAIM_STALE_SECONDS`;
 - опциональный `MEVAD_WORKER_ID`.
 
 Legacy queue entries, содержащие только `job_id`, остаются читаемыми во время
@@ -132,7 +138,6 @@ Compose поднимает PostgreSQL, Redis с AOF, API и worker. API/worker �
 
 ## Следующие ограничения
 
-- timestamped recovery для claim-to-lease gap;
 - retry backoff и transient/permanent error classification;
 - transactional outbox;
 - migration runner;

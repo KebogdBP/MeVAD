@@ -143,9 +143,10 @@ error_message: The media job exceeded its processing deadline.
 `SqlJobRepository`, `RedisJobQueue` и `WorkerRuntime` теперь связывают API и
 отдельный process. Следующий infrastructure layer требует:
 
-- timestamped recovery узкого окна до создания lease;
 - retry backoff и permanent-error classification;
-- recovery зависших running jobs;
 - storage TTL;
 - process-level resource limits;
 - network sandbox.
+
+Runtime уже выполняет два selective recovery прохода: timestamped Redis reaper
+для claim-to-lease gap и SQL lease recovery для зависших running jobs.

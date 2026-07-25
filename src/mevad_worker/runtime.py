@@ -4,6 +4,7 @@ import logging
 import os
 import signal
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from threading import Event
 from time import monotonic
 from typing import Protocol
@@ -40,16 +41,18 @@ class WorkerRuntime:
         *,
         poll_timeout_seconds: int = 5,
         recovery_interval_seconds: int = 30,
+        claim_stale_seconds: int = 120,
     ) -> None:
         self._queue = queue
         self._service = service
         self._executor = executor
         self._poll_timeout_seconds = poll_timeout_seconds
         self._recovery_interval_seconds = recovery_interval_seconds
+        self._claim_stale_seconds = claim_stale_seconds
         self._last_recovery = 0.0
 
     def recover(self) -> int:
-        recovered = 0
+        recovered = self._recover_unleased_claims()
         for candidate in self._service.find_expired():
             if candidate.claim_receipt is None:
                 continue
@@ -70,6 +73,26 @@ class WorkerRuntime:
                 self._queue.dead_letter(claim)
             recovered += 1
         self._last_recovery = monotonic()
+        return recovered
+
+    def _recover_unleased_claims(self) -> int:
+        before = datetime.now(UTC) - timedelta(seconds=self._claim_stale_seconds)
+        recovered = 0
+        for claim in self._queue.find_stale(before=before):
+            try:
+                job = self._service.get(claim.job_id)
+            except JobNotFoundError:
+                self._queue.acknowledge(claim)
+                recovered += 1
+                continue
+            if job.status is JobStatus.QUEUED and job.claim_receipt is None:
+                self._queue.retry(claim)
+                recovered += 1
+            elif job.status.is_terminal or (
+                job.claim_receipt is not None and job.claim_receipt != claim.receipt
+            ):
+                self._queue.acknowledge(claim)
+                recovered += 1
         return recovered
 
     def run_once(self) -> bool:
@@ -144,6 +167,7 @@ def create_runtime(settings: Settings | None = None) -> WorkerRuntime:
         ),
         poll_timeout_seconds=selected.worker_poll_timeout_seconds,
         recovery_interval_seconds=selected.worker_recovery_interval_seconds,
+        claim_stale_seconds=selected.worker_claim_stale_seconds,
     )
 
 

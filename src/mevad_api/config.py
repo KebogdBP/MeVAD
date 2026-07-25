@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     worker_lease_seconds: int = Field(default=60, ge=5, le=3600)
     worker_heartbeat_seconds: int = Field(default=15, ge=1, le=300)
     worker_recovery_interval_seconds: int = Field(default=30, ge=5, le=600)
+    worker_claim_stale_seconds: int = Field(default=120, ge=30, le=3600)
     job_max_attempts: int = Field(default=3, ge=1, le=10)
     storage_root: Path = Path("storage/jobs")
 

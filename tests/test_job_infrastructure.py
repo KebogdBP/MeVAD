@@ -1,6 +1,6 @@
 from collections.abc import Iterator
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import create_engine
@@ -67,6 +67,15 @@ class FakeRedis:
     def eval(self, script: str, numkeys: int, *keys_and_args: str) -> object:
         self._check()
         assert script
+        if numkeys == 1:
+            source, receipt, replacement = keys_and_args
+            assert source == "test:jobs:processing"
+            encoded = receipt.encode()
+            if encoded not in self.processing:
+                return 0
+            self.processing.remove(encoded)
+            self.processing.insert(0, replacement.encode())
+            return 1
         assert numkeys == 2
         source, destination, receipt, replacement = keys_and_args
         assert source == "test:jobs:processing"
@@ -77,6 +86,11 @@ class FakeRedis:
         target = self.ready if destination == "test:jobs" else self.dead
         target.insert(0, replacement.encode())
         return 1
+
+    def lrange(self, name: str, start: int, end: int) -> list[bytes]:
+        self._check()
+        assert (name, start, end) == ("test:jobs:processing", 0, -1)
+        return list(self.processing)
 
     def _check(self) -> None:
         if self.fail:
@@ -154,7 +168,10 @@ def test_redis_queue_claim_acknowledge_and_recovery() -> None:
     assert second is not None and second.job_id == "job-2"
     assert queue.recover_inflight() == 1
     recovered = queue.dequeue(timeout_seconds=1)
-    assert recovered == second
+    assert recovered is not None
+    assert recovered.job_id == second.job_id
+    assert recovered.receipt != second.receipt
+    assert recovered.claimed_at is not None
 
 
 def test_redis_queue_retries_and_dead_letters_claims() -> None:
@@ -211,8 +228,24 @@ def test_redis_queue_reads_legacy_plain_job_identifier() -> None:
 
     claim = queue.dequeue(timeout_seconds=1)
 
-    assert claim == JobClaim(job_id="legacy-job", receipt="legacy-job")
+    assert claim is not None and claim.job_id == "legacy-job"
+    assert claim.claimed_at is not None
     queue.acknowledge(claim)
+
+
+def test_redis_queue_finds_only_claims_before_deadline() -> None:
+    now = datetime(2026, 7, 25, 12, 0, tzinfo=UTC)
+    queue = RedisJobQueue(
+        FakeRedis(),
+        queue_name="test:jobs",
+        clock=lambda: now,
+    )
+    queue.enqueue("job-1")
+    claim = queue.dequeue(timeout_seconds=1)
+    assert claim is not None
+
+    assert queue.find_stale(before=now - timedelta(seconds=1)) == ()
+    assert queue.find_stale(before=now) == (claim,)
 
 
 def test_redis_queue_maps_connection_errors() -> None:
@@ -226,6 +259,8 @@ def test_redis_queue_maps_connection_errors() -> None:
         queue.dequeue(timeout_seconds=1)
     with pytest.raises(JobQueueError):
         queue.recover_inflight()
+    with pytest.raises(JobQueueError):
+        queue.find_stale(before=datetime.now(UTC))
     with pytest.raises(JobQueueError):
         queue.retry(JobClaim(job_id="job-1", receipt="receipt"))
     with pytest.raises(JobQueueError):

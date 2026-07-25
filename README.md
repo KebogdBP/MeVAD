@@ -32,6 +32,7 @@
 - streaming download progress через bounded machine protocol.
 - PostgreSQL worker leases, heartbeat и selective stale-job recovery.
 - unique Redis delivery receipts и stale-ack fencing.
+- timestamped Redis claim reaper для crash window до SQL lease.
 - отдельный worker process и локальный Docker Compose stack.
 
 Web-интерфейс ещё не реализован.
@@ -174,6 +175,8 @@ docker compose up --build
 state, Redis переносит job identifiers, а API и worker используют общий volume
 `storage/jobs`. Worker повторяет failed operation до `MEVAD_JOB_MAX_ATTEMPTS`,
 после чего переносит exhausted claim в `mevad:jobs:dead`.
+Зависший claim без SQL lease автоматически возвращается в ready после
+`MEVAD_WORKER_CLAIM_STALE_SECONDS`.
 
 Для ручного запуска задайте `MEVAD_JOB_BACKEND=postgres`,
 `MEVAD_QUEUE_BACKEND=redis`, database/Redis URLs, затем запустите

@@ -111,6 +111,12 @@ selective SQL query, а не глобальным replay processing queue.
 Receipt меняется при каждом retry и служит fencing token для Redis list
 operations. API его не публикует.
 
+Processing payload получает `claimed_at`. Периодический reaper рассматривает
+только claims старше `MEVAD_WORKER_CLAIM_STALE_SECONDS` и возвращает delivery в
+ready, когда соответствующая SQL job всё ещё `queued` без lease receipt. Это
+закрывает crash window между Redis claim и созданием SQL lease, не переигрывая
+активные jobs.
+
 ## HTTP API
 
 ### Создание
@@ -156,9 +162,7 @@ POST /api/v1/jobs/{job_id}/cancel
 
 Production Job System потребует:
 
-- timestamped claim-to-lease gap recovery;
 - retry backoff и error classification;
-- stale-job recovery;
 - TTL результата;
 - idempotency keys;
 - per-user quotas;

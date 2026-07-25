@@ -3,6 +3,7 @@
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from threading import Condition
 from typing import Protocol
 from uuid import uuid4
@@ -16,6 +17,7 @@ class JobClaim:
 
     job_id: str
     receipt: str
+    claimed_at: datetime | None = None
 
 
 ReceiptFactory = Callable[[], str]
@@ -48,16 +50,26 @@ class JobQueue(Protocol):
         """Return abandoned claims to the ready queue."""
         ...
 
+    def find_stale(self, *, before: datetime) -> tuple[JobClaim, ...]:
+        """Return claims older than the supplied UTC deadline."""
+        ...
+
 
 class InMemoryJobQueue:
     """Thread-safe queue for tests and single-process development."""
 
-    def __init__(self, *, receipt_factory: ReceiptFactory | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        receipt_factory: ReceiptFactory | None = None,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
         self._items: deque[JobClaim] = deque()
         self._processing: dict[str, JobClaim] = {}
         self._dead_letters: deque[JobClaim] = deque()
         self._condition = Condition()
         self._receipt_factory = receipt_factory or _new_receipt
+        self._clock = clock or _utc_now
 
     def enqueue(self, job_id: str) -> None:
         with self._condition:
@@ -73,7 +85,12 @@ class InMemoryJobQueue:
                 self._condition.wait(timeout_seconds)
             if not self._items:
                 return None
-            claim = self._items.popleft()
+            queued = self._items.popleft()
+            claim = JobClaim(
+                job_id=queued.job_id,
+                receipt=queued.receipt,
+                claimed_at=self._clock(),
+            )
             self._processing[claim.receipt] = claim
             return claim
 
@@ -98,12 +115,23 @@ class InMemoryJobQueue:
         self._items.extend(claims)
         return len(claims)
 
+    def find_stale(self, *, before: datetime) -> tuple[JobClaim, ...]:
+        return tuple(
+            claim
+            for claim in self._processing.values()
+            if claim.claimed_at is not None and claim.claimed_at <= before
+        )
+
     def _remove_processing(self, claim: JobClaim) -> None:
         current = self._processing.get(claim.receipt)
-        if current != claim:
+        if current is None or current.job_id != claim.job_id:
             raise JobQueueError("Claimed job was not found in the processing queue.")
         del self._processing[claim.receipt]
 
 
 def _new_receipt() -> str:
     return uuid4().hex
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
