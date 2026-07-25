@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from mevad.adapters.process import PollCallback, ProcessResult
+from mevad.adapters.process import LineCallback, PollCallback, ProcessResult
 from mevad.adapters.yt_dlp_command import (
     YtDlpCommandAudioExtractor,
     YtDlpCommandVideoDownloader,
@@ -31,10 +31,12 @@ class FakeRunner:
         *,
         returncode: int = 0,
         metadata: bool = True,
+        progress_lines: tuple[str, ...] = (),
     ) -> None:
         self.output_path = output_path
         self.returncode = returncode
         self.metadata = metadata
+        self.progress_lines = progress_lines
         self.calls: list[tuple[list[str], float, CancellationToken | None]] = []
 
     def __call__(
@@ -44,8 +46,12 @@ class FakeRunner:
         timeout: float,
         cancellation: CancellationToken | None = None,
         on_poll: PollCallback | None = None,
+        on_stdout_line: LineCallback | None = None,
     ) -> ProcessResult:
         self.calls.append((list(arguments), timeout, cancellation))
+        if on_stdout_line is not None:
+            for line in self.progress_lines:
+                on_stdout_line(line)
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
         self.output_path.write_bytes(b"media")
         stdout = ""
@@ -116,6 +122,42 @@ def test_managed_audio_command_uses_codec_and_bitrate(tmp_path: Path) -> None:
     assert result.output_path == output_path
 
 
+def test_managed_command_normalizes_streaming_progress(tmp_path: Path) -> None:
+    runner = FakeRunner(
+        tmp_path / "video.mp4",
+        progress_lines=(
+            "ignored extractor output",
+            "MEVAD_PROGRESS=25|100|NA|12.5|6",
+            "MEVAD_PROGRESS=50|NA|200|NA|unknown",
+            "MEVAD_PROGRESS=malformed",
+            "MEVAD_PROCESSING=1",
+        ),
+    )
+    downloader = YtDlpCommandVideoDownloader(runner=runner)
+    events: list[DownloadProgress] = []
+
+    downloader.download(
+        VideoDownloadRequest(source=_source(), output_directory=tmp_path),
+        on_progress=events.append,
+    )
+
+    assert [event.status for event in events] == [
+        DownloadStatus.DOWNLOADING,
+        DownloadStatus.DOWNLOADING,
+        DownloadStatus.DOWNLOADING,
+        DownloadStatus.PROCESSING,
+        DownloadStatus.COMPLETED,
+    ]
+    first_progress = events[1]
+    assert first_progress.downloaded_bytes == 25
+    assert first_progress.total_bytes == 100
+    assert first_progress.speed_bytes_per_second == 12.5
+    assert first_progress.eta_seconds == 6
+    estimated_progress = events[2]
+    assert estimated_progress.total_bytes == 200
+    assert estimated_progress.speed_bytes_per_second is None
+
+
 def test_managed_wav_command_omits_bitrate(tmp_path: Path) -> None:
     runner = FakeRunner(tmp_path / "audio" / "track.wav")
     extractor = YtDlpCommandAudioExtractor(runner=runner, executable=("yt-dlp",))
@@ -129,6 +171,7 @@ def test_managed_wav_command_omits_bitrate(tmp_path: Path) -> None:
     )
 
     assert "--audio-quality" not in runner.calls[0][0]
+    assert "--progress-template" in runner.calls[0][0]
 
 
 def test_managed_command_hides_stderr_on_failure(tmp_path: Path) -> None:

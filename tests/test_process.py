@@ -68,6 +68,48 @@ def test_managed_process_invokes_poll_callback() -> None:
     assert polls
 
 
+def test_managed_process_streams_stdout_lines_in_order() -> None:
+    lines: list[str] = []
+
+    result = run_process(
+        [
+            sys.executable,
+            "-c",
+            "import time; print('first', flush=True); time.sleep(.3); print('second', flush=True)",
+        ],
+        timeout=5,
+        on_stdout_line=lines.append,
+    )
+
+    assert lines == ["first", "second"]
+    assert result.stdout.splitlines() == lines
+
+
+def test_managed_process_bounds_captured_output() -> None:
+    result = run_process(
+        [sys.executable, "-c", "print('x' * 1_100_000)"],
+        timeout=5,
+    )
+
+    assert len(result.stdout) <= 1_000_000
+
+
+def test_managed_process_terminates_when_line_callback_fails() -> None:
+    def fail_line(_line: str) -> None:
+        raise RuntimeError("progress failed")
+
+    with pytest.raises(RuntimeError, match="progress failed"):
+        run_process(
+            [
+                sys.executable,
+                "-c",
+                "import time; print('progress', flush=True); time.sleep(10)",
+            ],
+            timeout=5,
+            on_stdout_line=fail_line,
+        )
+
+
 def test_managed_process_terminates_when_poll_callback_fails() -> None:
     def fail_poll() -> None:
         raise RuntimeError("heartbeat failed")

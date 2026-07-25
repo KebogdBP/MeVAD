@@ -90,6 +90,10 @@ Core adapters публикуют `DownloadProgress`. `ProgressBridge` преоб
 `processing` event переводит running job в processing. Повторяющиеся или
 уменьшающиеся значения не записываются.
 
+Managed yt-dlp передаёт downloaded bytes, total/estimated bytes, speed и ETA
+через маркированный streaming stdout protocol. Произвольный extractor output
+игнорируется.
+
 ## Cancellation
 
 `JobCancellationToken` каждый раз читает актуальное job state:

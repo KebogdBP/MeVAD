@@ -49,8 +49,19 @@ MEVAD_PATH=...
 deadline от 60 секунд до 24 часов. Cancellation token читает PostgreSQL job
 state на каждом process poll.
 
-## Progress
+## Streaming progress
 
-Текущий adapter публикует coarse `downloading` и `completed`. Следующий
-инкремент добавит bounded streaming parser для `--progress-template`, не смешивая
-machine protocol с произвольным extractor output.
+yt-dlp получает отдельные machine templates:
+
+```text
+MEVAD_PROGRESS=downloaded|total|estimated_total|speed|eta
+MEVAD_PROCESSING=1
+```
+
+Parser игнорирует все немаркированные строки, выбирает declared или estimated
+total и преобразует отсутствующие значения в `None`. `DownloadProgress`
+поступает в `ProgressBridge` до завершения процесса.
+
+stdout/stderr дренируются reader threads, но callback исполняется в основном
+worker thread. Capture ограничен одним мегабайтом на stream и не растёт вместе
+с длительностью download.

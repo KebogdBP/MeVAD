@@ -4,7 +4,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from mevad.adapters.process import ProcessResult, ProcessRunner, run_process
+from mevad.adapters.process import LineCallback, ProcessResult, ProcessRunner, run_process
 from mevad.audio import AudioExtractor, build_audio_format_selector
 from mevad.downloader import (
     CancellationToken,
@@ -29,6 +29,8 @@ from mevad.security import normalize_remote_url
 _ID_MARKER = "MEVAD_ID="
 _TITLE_MARKER = "MEVAD_TITLE="
 _PATH_MARKER = "MEVAD_PATH="
+_PROGRESS_MARKER = "MEVAD_PROGRESS="
+_PROCESSING_MARKER = "MEVAD_PROCESSING="
 
 
 class YtDlpCommandVideoDownloader(VideoDownloader):
@@ -68,6 +70,7 @@ class YtDlpCommandVideoDownloader(VideoDownloader):
             arguments,
             timeout=self._timeout,
             cancellation=cancellation,
+            on_stdout_line=_progress_line_callback(on_progress),
         )
         media_id, title, output_path = _parse_result(result, output_directory)
         download = VideoDownloadResult(
@@ -120,6 +123,7 @@ class YtDlpCommandAudioExtractor(AudioExtractor):
             arguments,
             timeout=self._timeout,
             cancellation=cancellation,
+            on_stdout_line=_progress_line_callback(on_progress),
         )
         media_id, title, output_path = _parse_result(result, output_directory)
         extraction = AudioExtractionResult(
@@ -140,6 +144,17 @@ def _common_arguments(output_directory: Path) -> list[str]:
         "--no-overwrites",
         "--continue",
         "--newline",
+        "--progress",
+        "--progress-delta",
+        "0.5",
+        "--progress-template",
+        (
+            f"download:{_PROGRESS_MARKER}"
+            "%(progress.downloaded_bytes)s|%(progress.total_bytes)s|"
+            "%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s"
+        ),
+        "--progress-template",
+        f"postprocess:{_PROCESSING_MARKER}1",
         "--socket-timeout",
         "15",
         "--retries",
@@ -211,3 +226,45 @@ def _notify_completed(callback: ProgressCallback | None, path: Path, size: int) 
                 filename=str(path),
             )
         )
+
+
+def _progress_line_callback(callback: ProgressCallback | None) -> LineCallback | None:
+    if callback is None:
+        return None
+
+    def handle(line: str) -> None:
+        if line.startswith(_PROCESSING_MARKER):
+            callback(DownloadProgress(status=DownloadStatus.PROCESSING))
+            return
+        if not line.startswith(_PROGRESS_MARKER):
+            return
+        fields = line.removeprefix(_PROGRESS_MARKER).split("|")
+        if len(fields) != 5:
+            return
+        downloaded = _optional_integer(fields[0])
+        total = _optional_integer(fields[1]) or _optional_integer(fields[2])
+        callback(
+            DownloadProgress(
+                status=DownloadStatus.DOWNLOADING,
+                downloaded_bytes=downloaded,
+                total_bytes=total,
+                speed_bytes_per_second=_optional_number(fields[3]),
+                eta_seconds=_optional_number(fields[4]),
+            )
+        )
+
+    return handle
+
+
+def _optional_integer(value: str) -> int | None:
+    number = _optional_number(value)
+    return int(number) if number is not None else None
+
+
+def _optional_number(value: str) -> float | None:
+    if value.strip().lower() in {"", "na", "none", "unknown"}:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None

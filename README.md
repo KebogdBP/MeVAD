@@ -29,6 +29,7 @@
 - bounded retries и Redis dead-letter queue.
 - managed FFmpeg subprocess cancellation и hard timeouts.
 - изолированный yt-dlp worker subprocess для video/audio jobs.
+- streaming download progress через bounded machine protocol.
 - отдельный worker process и локальный Docker Compose stack.
 
 Web-интерфейс ещё не реализован.
