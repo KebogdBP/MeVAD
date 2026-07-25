@@ -21,6 +21,17 @@ class RedisListClient(Protocol):
 
     def rpoplpush(self, src: str, dst: str) -> bytes | None: ...
 
+    def eval(self, script: str, numkeys: int, *keys_and_args: str) -> object: ...
+
+
+_MOVE_CLAIM_SCRIPT = """
+local removed = redis.call('LREM', KEYS[1], 1, ARGV[1])
+if removed == 1 then
+    redis.call('LPUSH', KEYS[2], ARGV[1])
+end
+return removed
+"""
+
 
 class RedisJobQueue:
     """FIFO queue built from Redis LPUSH/BRPOP."""
@@ -31,6 +42,7 @@ class RedisJobQueue:
         self._client = client
         self._queue_name = queue_name
         self._processing_name = f"{queue_name}:processing"
+        self._dead_letter_name = f"{queue_name}:dead"
 
     @classmethod
     def from_url(cls, redis_url: str, *, queue_name: str = "mevad:jobs") -> "RedisJobQueue":
@@ -69,6 +81,12 @@ class RedisJobQueue:
         if removed != 1:
             raise JobQueueError("Claimed job was not found in the processing queue.")
 
+    def retry(self, job_id: str) -> None:
+        self._move_claim(job_id, self._queue_name, action="retry")
+
+    def dead_letter(self, job_id: str) -> None:
+        self._move_claim(job_id, self._dead_letter_name, action="dead-letter")
+
     def recover_inflight(self) -> int:
         try:
             count = self._client.llen(self._processing_name)
@@ -79,3 +97,17 @@ class RedisJobQueue:
             return recovered
         except RedisError as error:
             raise JobQueueError("Could not recover in-flight jobs.") from error
+
+    def _move_claim(self, job_id: str, destination: str, *, action: str) -> None:
+        try:
+            moved = self._client.eval(
+                _MOVE_CLAIM_SCRIPT,
+                2,
+                self._processing_name,
+                destination,
+                job_id,
+            )
+        except RedisError as error:
+            raise JobQueueError(f"Could not {action} the job.") from error
+        if moved != 1:
+            raise JobQueueError("Claimed job was not found in the processing queue.")

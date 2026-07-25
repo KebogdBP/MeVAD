@@ -25,11 +25,15 @@ class JobService:
         repository: JobRepository,
         *,
         queue: JobQueue | None = None,
+        default_max_attempts: int = 3,
         clock: Clock | None = None,
         job_id_factory: JobIdFactory | None = None,
     ) -> None:
         self._repository = repository
         self._queue = queue
+        if not 1 <= default_max_attempts <= 10:
+            raise ValueError("Default max attempts must be between 1 and 10.")
+        self._default_max_attempts = default_max_attempts
         self._clock = clock or _utc_now
         self._job_id_factory = job_id_factory or _new_job_id
 
@@ -51,6 +55,7 @@ class JobService:
             created_at=now,
             updated_at=now,
             version=1,
+            max_attempts=self._default_max_attempts,
         )
         self._repository.add(job)
         if self._queue is not None:
@@ -84,7 +89,31 @@ class JobService:
     def start(self, job_id: str) -> Job:
         job = self.get(job_id)
         self._require_status(job, JobStatus.QUEUED)
-        return self._transition(job, status=JobStatus.RUNNING)
+        return self._transition(
+            job,
+            status=JobStatus.RUNNING,
+            attempt_count=job.attempt_count + 1,
+        )
+
+    def retry(self, job_id: str) -> Job:
+        """Reset a failed job for another bounded execution attempt."""
+
+        job = self.get(job_id)
+        self._require_status(job, JobStatus.FAILED)
+        if job.attempt_count >= job.max_attempts:
+            raise InvalidJobTransitionError("Job retry attempts are exhausted.")
+        updated = replace(
+            job,
+            status=JobStatus.QUEUED,
+            progress_percent=0,
+            result_reference=None,
+            error_code=None,
+            error_message=None,
+            updated_at=self._clock(),
+            version=job.version + 1,
+        )
+        self._repository.update(updated, expected_version=job.version)
+        return updated
 
     def mark_processing(self, job_id: str) -> Job:
         job = self.get(job_id)
@@ -138,6 +167,7 @@ class JobService:
         *,
         status: JobStatus | None = None,
         progress_percent: int | None = None,
+        attempt_count: int | None = None,
         result_reference: str | None = None,
         error_code: str | None = None,
         error_message: str | None = None,
@@ -148,6 +178,7 @@ class JobService:
             progress_percent=(
                 progress_percent if progress_percent is not None else job.progress_percent
             ),
+            attempt_count=(attempt_count if attempt_count is not None else job.attempt_count),
             result_reference=(
                 result_reference if result_reference is not None else job.result_reference
             ),

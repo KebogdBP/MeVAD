@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
     version INTEGER NOT NULL CHECK (version > 0),
+    attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+    max_attempts INTEGER NOT NULL DEFAULT 3 CHECK (max_attempts BETWEEN 1 AND 10),
     result_reference TEXT,
     error_code VARCHAR(64),
     error_message TEXT

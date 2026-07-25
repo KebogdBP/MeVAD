@@ -42,16 +42,36 @@ PostgreSQL хранит полную модель задачи. Redis перен
 
 ## Redis delivery
 
-Очередь использует две Redis lists:
+Очередь использует три Redis lists:
 
 - `mevad:jobs` — ready;
 - `mevad:jobs:processing` — claimed, но ещё не acknowledged.
+- `mevad:jobs:dead` — exhausted after bounded retries.
 
 `BRPOPLPUSH` одновременно забирает oldest ready item и сохраняет его в
 processing. После завершения worker вызывает `LREM`. При restart runtime
 возвращает оставшиеся processing entries в ready.
 
 Это at-least-once delivery. Recovery текущего MVP рассчитан на один worker.
+
+## Retry policy
+
+Job хранит `attempt_count` и `max_attempts`. Переход `queued → running`
+увеличивает attempt atomically вместе с version. Если executor возвращает
+`failed`:
+
+```text
+attempt_count < max_attempts
+    failed → queued
+    processing → ready
+
+attempt_count == max_attempts
+    processing → dead
+```
+
+Перемещения claim выполняются Redis Lua script как одна операция. Настройка
+`MEVAD_JOB_MAX_ATTEMPTS` принимает значения 1–10 и применяется при создании
+новой задачи.
 
 ## Ошибка публикации
 
@@ -79,7 +99,7 @@ Compose поднимает PostgreSQL, Redis с AOF, API и worker. API/worker �
 
 - per-worker lease и heartbeat;
 - безопасное recovery при нескольких workers;
-- retry/backoff и dead-letter policy;
+- retry backoff и transient/permanent error classification;
 - transactional outbox;
 - migration runner;
 - result TTL/cleanup scheduler;

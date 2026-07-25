@@ -71,6 +71,7 @@ acknowledgement.
 - progress 0–100;
 - UTC created/updated timestamps;
 - monotonic version;
+- attempt count и immutable max attempts;
 - result reference;
 - safe error code/message.
 
@@ -97,6 +98,9 @@ Update использует optimistic concurrency. Несовпадение ver
 - предназначен только для тестов и разработки.
 
 `SqlJobRepository` использует PostgreSQL transaction и row version.
+
+Failed job может вернуться в `queued`, пока `attempt_count < max_attempts`.
+После исчерпания попыток Redis claim переносится в dead-letter list.
 
 ## HTTP API
 
@@ -144,7 +148,7 @@ POST /api/v1/jobs/{job_id}/cancel
 Production Job System потребует:
 
 - job claim/lease и heartbeat;
-- retry policy;
+- retry backoff и error classification;
 - stale-job recovery;
 - TTL результата;
 - idempotency keys;

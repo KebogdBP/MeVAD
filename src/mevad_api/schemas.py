@@ -192,6 +192,8 @@ class JobResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     version: int
+    attempt_count: int
+    max_attempts: int
     result_reference: str | None
     error_code: str | None
     error_message: str | None

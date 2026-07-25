@@ -209,6 +209,8 @@ def test_creates_reads_and_cancels_video_job() -> None:
         "quality": "720p",
         "container": "mp4",
     }
+    assert create_response.json()["attempt_count"] == 0
+    assert create_response.json()["max_attempts"] == 3
     assert get_response.status_code == 200
     assert get_response.json()["version"] == 1
     assert cancel_response.status_code == 200

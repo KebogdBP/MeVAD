@@ -51,6 +51,8 @@ class Job:
     created_at: datetime
     updated_at: datetime
     version: int
+    attempt_count: int = 0
+    max_attempts: int = 3
     result_reference: str | None = None
     error_code: str | None = None
     error_message: str | None = None

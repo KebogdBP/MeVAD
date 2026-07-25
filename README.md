@@ -26,6 +26,7 @@
 - Worker execution layer с dispatch, progress bridge и per-job storage.
 - PostgreSQL job repository с optimistic locking.
 - Redis queue с claim/ack и восстановлением in-flight задач.
+- bounded retries и Redis dead-letter queue.
 - отдельный worker process и локальный Docker Compose stack.
 
 Web-интерфейс ещё не реализован.
@@ -166,7 +167,8 @@ docker compose up --build
 
 После запуска API доступен на `http://localhost:8000`. PostgreSQL хранит job
 state, Redis переносит job identifiers, а API и worker используют общий volume
-`storage/jobs`.
+`storage/jobs`. Worker повторяет failed operation до `MEVAD_JOB_MAX_ATTEMPTS`,
+после чего переносит exhausted claim в `mevad:jobs:dead`.
 
 Для ручного запуска задайте `MEVAD_JOB_BACKEND=postgres`,
 `MEVAD_QUEUE_BACKEND=redis`, database/Redis URLs, затем запустите
@@ -214,5 +216,5 @@ FastAPI
       └── FFmpeg
 ```
 
-Следующий инфраструктурный инкремент добавит leases/heartbeat, retry policy,
+Следующий инфраструктурный инкремент добавит leases/heartbeat, retry backoff,
 TTL результатов и полноценный migration runner.

@@ -52,6 +52,7 @@ def test_runs_processes_and_completes_job() -> None:
     )
 
     assert running.status is JobStatus.RUNNING
+    assert running.attempt_count == 1
     assert progressed.progress_percent == 25
     assert processing.status is JobStatus.PROCESSING
     assert nearly_done.progress_percent == 90
@@ -98,6 +99,29 @@ def test_worker_can_fail_after_cancellation_request() -> None:
 
     assert failed.status is JobStatus.FAILED
     assert failed.error_code == "worker_terminated"
+
+
+def test_failed_job_can_retry_until_attempt_limit() -> None:
+    service = _service()
+    job = _create(service)
+    service.start(job.job_id)
+    service.fail(job.job_id, error_code="temporary", error_message="Temporary failure.")
+
+    retried = service.retry(job.job_id)
+    second_attempt = service.start(job.job_id)
+
+    assert retried.status is JobStatus.QUEUED
+    assert retried.progress_percent == 0
+    assert retried.error_code is None
+    assert second_attempt.attempt_count == 2
+
+    service.fail(job.job_id, error_code="temporary", error_message="Temporary failure.")
+    service.retry(job.job_id)
+    service.start(job.job_id)
+    service.fail(job.job_id, error_code="temporary", error_message="Temporary failure.")
+
+    with pytest.raises(InvalidJobTransitionError, match="exhausted"):
+        service.retry(job.job_id)
 
 
 def test_rejects_decreasing_or_complete_progress() -> None:

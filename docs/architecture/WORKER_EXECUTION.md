@@ -122,7 +122,7 @@ error_message: The media job could not be completed.
 
 - per-worker atomic lease;
 - worker heartbeat;
-- retries и dead-letter policy;
+- retry backoff и permanent-error classification;
 - recovery зависших running jobs;
 - storage TTL;
 - process-level resource limits;

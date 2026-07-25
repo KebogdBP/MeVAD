@@ -60,8 +60,16 @@ def _create_job_service(settings: Settings, queue: JobQueue) -> JobService:
         repository = SqlJobRepository.from_url(settings.database_url)
         if settings.auto_create_schema:
             repository.create_schema()
-        return JobService(repository, queue=queue)
-    return JobService(InMemoryJobRepository(), queue=queue)
+        return JobService(
+            repository,
+            queue=queue,
+            default_max_attempts=settings.job_max_attempts,
+        )
+    return JobService(
+        InMemoryJobRepository(),
+        queue=queue,
+        default_max_attempts=settings.job_max_attempts,
+    )
 
 
 app = create_app()

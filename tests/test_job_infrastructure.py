@@ -16,6 +16,7 @@ class FakeRedis:
     def __init__(self) -> None:
         self.ready: list[bytes] = []
         self.processing: list[bytes] = []
+        self.dead: list[bytes] = []
         self.fail = False
 
     def lpush(self, name: str, *values: str) -> int:
@@ -55,6 +56,20 @@ class FakeRedis:
         value = self.processing.pop()
         self.ready.insert(0, value)
         return value
+
+    def eval(self, script: str, numkeys: int, *keys_and_args: str) -> object:
+        self._check()
+        assert script
+        assert numkeys == 2
+        source, destination, job_id = keys_and_args
+        assert source == "test:jobs:processing"
+        encoded = job_id.encode()
+        if encoded not in self.processing:
+            return 0
+        self.processing.remove(encoded)
+        target = self.ready if destination == "test:jobs" else self.dead
+        target.insert(0, encoded)
+        return 1
 
     def _check(self) -> None:
         if self.fail:
@@ -108,6 +123,22 @@ def test_redis_queue_claim_acknowledge_and_recovery() -> None:
     assert queue.dequeue(timeout_seconds=1) == "job-2"
 
 
+def test_redis_queue_retries_and_dead_letters_claims() -> None:
+    client = FakeRedis()
+    queue = RedisJobQueue(client, queue_name="test:jobs")
+    queue.enqueue("retry-job")
+    queue.enqueue("dead-job")
+
+    assert queue.dequeue(timeout_seconds=1) == "retry-job"
+    queue.retry("retry-job")
+    assert queue.dequeue(timeout_seconds=1) == "dead-job"
+    queue.dead_letter("dead-job")
+
+    assert queue.dequeue(timeout_seconds=1) == "retry-job"
+    assert client.dead == [b"dead-job"]
+    queue.acknowledge("retry-job")
+
+
 def test_redis_queue_maps_connection_errors() -> None:
     client = FakeRedis()
     client.fail = True
@@ -119,6 +150,10 @@ def test_redis_queue_maps_connection_errors() -> None:
         queue.dequeue(timeout_seconds=1)
     with pytest.raises(JobQueueError):
         queue.recover_inflight()
+    with pytest.raises(JobQueueError):
+        queue.retry("job-1")
+    with pytest.raises(JobQueueError):
+        queue.dead_letter("job-1")
 
 
 def test_service_publishes_created_job(sql_repository: SqlJobRepository) -> None:

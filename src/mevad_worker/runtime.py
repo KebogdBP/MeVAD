@@ -7,7 +7,7 @@ from threading import Event
 from typing import Protocol
 
 from mevad.exceptions import InvalidJobTransitionError, JobNotFoundError
-from mevad.jobs import Job, JobQueue, JobService
+from mevad.jobs import Job, JobQueue, JobService, JobStatus
 from mevad.jobs.redis_queue import RedisJobQueue
 from mevad.jobs.sql_repository import SqlJobRepository
 from mevad_api.config import Settings
@@ -28,11 +28,13 @@ class WorkerRuntime:
     def __init__(
         self,
         queue: JobQueue,
+        service: JobService,
         executor: JobRunner,
         *,
         poll_timeout_seconds: int = 5,
     ) -> None:
         self._queue = queue
+        self._service = service
         self._executor = executor
         self._poll_timeout_seconds = poll_timeout_seconds
 
@@ -44,10 +46,30 @@ class WorkerRuntime:
         if job_id is None:
             return False
         try:
-            self._executor.execute(job_id)
+            result = self._executor.execute(job_id)
         except (InvalidJobTransitionError, JobNotFoundError):
             LOGGER.warning("Discarding stale queue entry for job %s", job_id)
-        self._queue.acknowledge(job_id)
+            self._queue.acknowledge(job_id)
+            return True
+        if result.status is not JobStatus.FAILED:
+            self._queue.acknowledge(job_id)
+            return True
+        if result.attempt_count < result.max_attempts:
+            self._service.retry(job_id)
+            self._queue.retry(job_id)
+            LOGGER.info(
+                "Retrying job %s after attempt %d of %d",
+                job_id,
+                result.attempt_count,
+                result.max_attempts,
+            )
+        else:
+            self._queue.dead_letter(job_id)
+            LOGGER.warning(
+                "Dead-lettered job %s after %d attempts",
+                job_id,
+                result.attempt_count,
+            )
         return True
 
     def run_forever(self, stop_requested: Callable[[], bool]) -> None:
@@ -74,6 +96,7 @@ def create_runtime(settings: Settings | None = None) -> WorkerRuntime:
     service = JobService(repository)
     return WorkerRuntime(
         queue,
+        service,
         create_default_executor(service, storage_root=selected.storage_root),
         poll_timeout_seconds=selected.worker_poll_timeout_seconds,
     )

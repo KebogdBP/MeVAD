@@ -119,6 +119,8 @@ def _to_response(job: Job) -> JobResponse:
         created_at=job.created_at,
         updated_at=job.updated_at,
         version=job.version,
+        attempt_count=job.attempt_count,
+        max_attempts=job.max_attempts,
         result_reference=job.result_reference,
         error_code=job.error_code,
         error_message=job.error_message,
