@@ -18,6 +18,9 @@ def create_default_executor(
     *,
     storage_root: Path = Path("storage/jobs"),
     media_timeout_seconds: float = 7200,
+    worker_id: str | None = None,
+    lease_duration_seconds: int = 60,
+    heartbeat_interval_seconds: int = 15,
 ) -> JobExecutor:
     """Compose the production-intent worker adapters."""
 
@@ -30,4 +33,7 @@ def create_default_executor(
             loop_maker=FFmpegLoopMaker(),
         ),
         workspaces=WorkspaceManager(storage_root),
+        worker_id=worker_id,
+        lease_duration_seconds=lease_duration_seconds,
+        heartbeat_interval_seconds=heartbeat_interval_seconds,
     )

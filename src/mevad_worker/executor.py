@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+from time import monotonic
 
 from mevad.audio import AudioExtractor
 from mevad.cutter import VideoCutter
@@ -49,12 +50,19 @@ class WorkerDependencies:
 class JobCancellationToken(CancellationToken):
     """Cancellation view backed by durable job state."""
 
-    def __init__(self, service: JobService, job_id: str) -> None:
+    def __init__(
+        self,
+        service: JobService,
+        job_id: str,
+        heartbeat: "LeaseHeartbeat",
+    ) -> None:
         self._service = service
         self._job_id = job_id
+        self._heartbeat = heartbeat
 
     @property
     def is_cancelled(self) -> bool:
+        self._heartbeat.pulse()
         return self._service.get(self._job_id).status in {
             JobStatus.CANCEL_REQUESTED,
             JobStatus.CANCELLED,
@@ -71,13 +79,16 @@ class ProgressBridge:
         *,
         base_percent: int,
         span_percent: int,
+        heartbeat: "LeaseHeartbeat",
     ) -> None:
         self._service = service
         self._job_id = job_id
         self._base = base_percent
         self._span = span_percent
+        self._heartbeat = heartbeat
 
     def __call__(self, progress: DownloadProgress) -> None:
+        self._heartbeat.pulse()
         job = self._service.get(self._job_id)
         if job.status in {JobStatus.CANCEL_REQUESTED, JobStatus.CANCELLED}:
             return
@@ -97,6 +108,39 @@ class ProgressBridge:
         return self._base + self._span
 
 
+class LeaseHeartbeat:
+    """Throttle durable lease renewals from progress/cancellation polling."""
+
+    def __init__(
+        self,
+        service: JobService,
+        job_id: str,
+        *,
+        worker_id: str | None,
+        lease_duration_seconds: int,
+        interval_seconds: int,
+    ) -> None:
+        self._service = service
+        self._job_id = job_id
+        self._worker_id = worker_id
+        self._lease_duration_seconds = lease_duration_seconds
+        self._interval_seconds = interval_seconds
+        self._last_pulse = monotonic()
+
+    def pulse(self) -> None:
+        if self._worker_id is None:
+            return
+        now = monotonic()
+        if now - self._last_pulse < self._interval_seconds:
+            return
+        self._service.heartbeat(
+            self._job_id,
+            worker_id=self._worker_id,
+            lease_duration_seconds=self._lease_duration_seconds,
+        )
+        self._last_pulse = now
+
+
 class JobExecutor:
     """Execute one already-persisted queued job synchronously."""
 
@@ -105,20 +149,38 @@ class JobExecutor:
         service: JobService,
         dependencies: WorkerDependencies,
         workspaces: WorkspaceManager,
+        *,
+        worker_id: str | None = None,
+        lease_duration_seconds: int = 60,
+        heartbeat_interval_seconds: int = 15,
     ) -> None:
         self._service = service
         self._dependencies = dependencies
         self._workspaces = workspaces
+        self._worker_id = worker_id
+        self._lease_duration_seconds = lease_duration_seconds
+        self._heartbeat_interval_seconds = heartbeat_interval_seconds
 
     def execute(self, job_id: str) -> Job:
-        job = self._service.start(job_id)
-        token = JobCancellationToken(self._service, job_id)
+        job = self._service.start(
+            job_id,
+            worker_id=self._worker_id,
+            lease_duration_seconds=self._lease_duration_seconds,
+        )
+        heartbeat = LeaseHeartbeat(
+            self._service,
+            job_id,
+            worker_id=self._worker_id,
+            lease_duration_seconds=self._lease_duration_seconds,
+            interval_seconds=self._heartbeat_interval_seconds,
+        )
+        token = JobCancellationToken(self._service, job_id, heartbeat)
         workspace: JobWorkspace | None = None
         staged_operation = job.operation in {JobOperation.CUT_VIDEO, JobOperation.MAKE_LOOP}
 
         try:
             workspace = self._workspaces.prepare(job_id)
-            output_path = self._dispatch(job, workspace, token)
+            output_path = self._dispatch(job, workspace, token, heartbeat)
             reference = self._workspaces.result_reference(output_path)
             return self._service.succeed(job_id, result_reference=reference)
         except DownloadCancelledError:
@@ -150,24 +212,26 @@ class JobExecutor:
         job: Job,
         workspace: JobWorkspace,
         token: JobCancellationToken,
+        heartbeat: LeaseHeartbeat,
     ) -> Path:
         if job.operation is JobOperation.DOWNLOAD_VIDEO:
-            return self._download_video(job, workspace.results, token, stage=(0, 100))
+            return self._download_video(job, workspace.results, token, heartbeat, stage=(0, 100))
         if job.operation is JobOperation.EXTRACT_AUDIO:
-            return self._extract_audio(job, workspace.results, token)
+            return self._extract_audio(job, workspace.results, token, heartbeat)
 
         source_path = self._download_video(
             job,
             workspace.intermediate,
             token,
+            heartbeat,
             stage=(0, 50),
             quality=VideoQuality.BEST,
             container=VideoContainer.AUTO,
         )
         if job.operation is JobOperation.CUT_VIDEO:
-            return self._cut_video(job, source_path, workspace.results, token)
+            return self._cut_video(job, source_path, workspace.results, token, heartbeat)
         if job.operation is JobOperation.MAKE_LOOP:
-            return self._make_loop(job, source_path, workspace.results, token)
+            return self._make_loop(job, source_path, workspace.results, token, heartbeat)
         raise ValueError(f"Unsupported job operation: {job.operation}")
 
     def _download_video(
@@ -175,6 +239,7 @@ class JobExecutor:
         job: Job,
         output_directory: Path,
         token: JobCancellationToken,
+        heartbeat: LeaseHeartbeat,
         *,
         stage: tuple[int, int],
         quality: VideoQuality | None = None,
@@ -194,6 +259,7 @@ class JobExecutor:
                 job.job_id,
                 base_percent=stage[0],
                 span_percent=stage[1],
+                heartbeat=heartbeat,
             ),
             cancellation=token,
         )
@@ -204,6 +270,7 @@ class JobExecutor:
         job: Job,
         output_directory: Path,
         token: JobCancellationToken,
+        heartbeat: LeaseHeartbeat,
     ) -> Path:
         result = self._dependencies.audio_extractor.extract(
             AudioExtractionRequest(
@@ -217,6 +284,7 @@ class JobExecutor:
                 job.job_id,
                 base_percent=0,
                 span_percent=100,
+                heartbeat=heartbeat,
             ),
             cancellation=token,
         )
@@ -228,6 +296,7 @@ class JobExecutor:
         source_path: Path,
         output_directory: Path,
         token: JobCancellationToken,
+        heartbeat: LeaseHeartbeat,
     ) -> Path:
         result = self._dependencies.video_cutter.cut(
             VideoCutRequest(
@@ -241,6 +310,7 @@ class JobExecutor:
                 job.job_id,
                 base_percent=50,
                 span_percent=50,
+                heartbeat=heartbeat,
             ),
             cancellation=token,
         )
@@ -252,6 +322,7 @@ class JobExecutor:
         source_path: Path,
         output_directory: Path,
         token: JobCancellationToken,
+        heartbeat: LeaseHeartbeat,
     ) -> Path:
         result = self._dependencies.loop_maker.render(
             LoopRenderRequest(
@@ -270,6 +341,7 @@ class JobExecutor:
                 job.job_id,
                 base_percent=50,
                 span_percent=50,
+                heartbeat=heartbeat,
             ),
             cancellation=token,
         )

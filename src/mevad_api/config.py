@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,8 +35,18 @@ class Settings(BaseSettings):
     auto_create_schema: bool = False
     worker_poll_timeout_seconds: int = Field(default=5, ge=1, le=60)
     worker_media_timeout_seconds: int = Field(default=7200, ge=60, le=86400)
+    worker_id: str | None = Field(default=None, min_length=1, max_length=128)
+    worker_lease_seconds: int = Field(default=60, ge=5, le=3600)
+    worker_heartbeat_seconds: int = Field(default=15, ge=1, le=300)
+    worker_recovery_interval_seconds: int = Field(default=30, ge=5, le=600)
     job_max_attempts: int = Field(default=3, ge=1, le=10)
     storage_root: Path = Path("storage/jobs")
+
+    @model_validator(mode="after")
+    def validate_worker_lease_timing(self) -> "Settings":
+        if self.worker_heartbeat_seconds >= self.worker_lease_seconds:
+            raise ValueError("Worker heartbeat interval must be shorter than its lease.")
+        return self
 
 
 @lru_cache

@@ -53,6 +53,8 @@ class Job:
     version: int
     attempt_count: int = 0
     max_attempts: int = 3
+    lease_owner: str | None = None
+    lease_expires_at: datetime | None = None
     result_reference: str | None = None
     error_code: str | None = None
     error_message: str | None = None

@@ -30,6 +30,7 @@
 - managed FFmpeg subprocess cancellation и hard timeouts.
 - изолированный yt-dlp worker subprocess для video/audio jobs.
 - streaming download progress через bounded machine protocol.
+- PostgreSQL worker leases, heartbeat и selective stale-job recovery.
 - отдельный worker process и локальный Docker Compose stack.
 
 Web-интерфейс ещё не реализован.
@@ -220,5 +221,5 @@ FastAPI
       └── FFmpeg
 ```
 
-Следующий инфраструктурный инкремент добавит leases/heartbeat, retry backoff,
-TTL результатов и полноценный migration runner.
+Следующий инфраструктурный инкремент добавит retry backoff, TTL результатов,
+cleanup scheduler и полноценный migration runner.

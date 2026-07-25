@@ -99,6 +99,25 @@ def test_sql_repository_round_trip_and_optimistic_update(
         repository.update(replace(updated, version=3), expected_version=1)
 
 
+def test_sql_repository_finds_expired_leases(
+    sql_repository: SqlJobRepository,
+) -> None:
+    job = replace(
+        _job(),
+        status=JobStatus.RUNNING,
+        lease_owner="worker-1",
+        lease_expires_at=datetime(2026, 7, 25, 12, 1, tzinfo=UTC),
+    )
+    sql_repository.add(job)
+
+    expired = sql_repository.find_expired(
+        now=datetime(2026, 7, 25, 12, 2, tzinfo=UTC),
+        limit=10,
+    )
+
+    assert expired == (job,)
+
+
 def test_sql_repository_rejects_duplicate_identifier(
     sql_repository: SqlJobRepository,
 ) -> None:

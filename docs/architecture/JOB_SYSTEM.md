@@ -72,6 +72,7 @@ acknowledgement.
 - UTC created/updated timestamps;
 - monotonic version;
 - attempt count и immutable max attempts;
+- internal worker lease owner/deadline;
 - result reference;
 - safe error code/message.
 
@@ -101,6 +102,10 @@ Update использует optimistic concurrency. Несовпадение ver
 
 Failed job может вернуться в `queued`, пока `attempt_count < max_attempts`.
 После исчерпания попыток Redis claim переносится в dead-letter list.
+
+Lease metadata остаётся internal и не входит в `JobResponse`. Heartbeat
+продлевает deadline только для текущего owner; expired jobs восстанавливаются
+selective SQL query, а не глобальным replay processing queue.
 
 ## HTTP API
 
@@ -147,7 +152,7 @@ POST /api/v1/jobs/{job_id}/cancel
 
 Production Job System потребует:
 
-- job claim/lease и heartbeat;
+- claim-to-lease gap recovery;
 - retry backoff и error classification;
 - stale-job recovery;
 - TTL результата;

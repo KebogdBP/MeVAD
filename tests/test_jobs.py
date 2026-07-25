@@ -124,6 +124,85 @@ def test_failed_job_can_retry_until_attempt_limit() -> None:
         service.retry(job.job_id)
 
 
+def test_worker_lease_heartbeat_and_terminal_cleanup() -> None:
+    clock = Clock()
+    repository = InMemoryJobRepository()
+    service = JobService(repository, clock=clock, job_id_factory=lambda: "job-1")
+    job = _create(service)
+
+    running = service.start(
+        job.job_id,
+        worker_id="worker-1",
+        lease_duration_seconds=60,
+    )
+    original_deadline = running.lease_expires_at
+    heartbeat = service.heartbeat(
+        job.job_id,
+        worker_id="worker-1",
+        lease_duration_seconds=60,
+    )
+
+    assert running.lease_owner == "worker-1"
+    assert original_deadline is not None
+    assert heartbeat.lease_expires_at is not None
+    assert heartbeat.lease_expires_at > original_deadline
+
+    with pytest.raises(InvalidJobTransitionError, match="another worker"):
+        service.heartbeat(
+            job.job_id,
+            worker_id="worker-2",
+            lease_duration_seconds=60,
+        )
+
+    succeeded = service.succeed(job.job_id, result_reference="result.mp4")
+    assert succeeded.lease_owner is None
+    assert succeeded.lease_expires_at is None
+
+
+def test_expired_lease_is_found_and_failed_safely() -> None:
+    clock = Clock()
+    repository = InMemoryJobRepository()
+    service = JobService(repository, clock=clock, job_id_factory=lambda: "job-1")
+    job = _create(service)
+    running = service.start(
+        job.job_id,
+        worker_id="worker-1",
+        lease_duration_seconds=5,
+    )
+    assert running.lease_expires_at is not None
+    clock.current = running.lease_expires_at
+
+    assert [expired.job_id for expired in service.find_expired()] == ["job-1"]
+    failed = service.expire_lease(job.job_id)
+
+    assert failed.status is JobStatus.FAILED
+    assert failed.error_code == "worker_lease_expired"
+    assert failed.lease_owner is None
+
+
+def test_cancel_requested_expired_lease_becomes_cancelled() -> None:
+    clock = Clock()
+    service = JobService(
+        InMemoryJobRepository(),
+        clock=clock,
+        job_id_factory=lambda: "job-1",
+    )
+    job = _create(service)
+    running = service.start(
+        job.job_id,
+        worker_id="worker-1",
+        lease_duration_seconds=5,
+    )
+    service.cancel(job.job_id)
+    assert running.lease_expires_at is not None
+    clock.current = running.lease_expires_at
+
+    cancelled = service.expire_lease(job.job_id)
+
+    assert cancelled.status is JobStatus.CANCELLED
+    assert cancelled.lease_owner is None
+
+
 def test_rejects_decreasing_or_complete_progress() -> None:
     service = _service()
     job = _create(service)

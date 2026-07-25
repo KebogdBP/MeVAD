@@ -1,12 +1,19 @@
 """Long-running Redis/PostgreSQL worker process."""
 
 import logging
+import os
 import signal
 from collections.abc import Callable
 from threading import Event
+from time import monotonic
 from typing import Protocol
+from uuid import uuid4
 
-from mevad.exceptions import InvalidJobTransitionError, JobNotFoundError
+from mevad.exceptions import (
+    ConcurrentJobUpdateError,
+    InvalidJobTransitionError,
+    JobNotFoundError,
+)
 from mevad.jobs import Job, JobQueue, JobService, JobStatus
 from mevad.jobs.redis_queue import RedisJobQueue
 from mevad.jobs.sql_repository import SqlJobRepository
@@ -32,16 +39,36 @@ class WorkerRuntime:
         executor: JobRunner,
         *,
         poll_timeout_seconds: int = 5,
+        recovery_interval_seconds: int = 30,
     ) -> None:
         self._queue = queue
         self._service = service
         self._executor = executor
         self._poll_timeout_seconds = poll_timeout_seconds
+        self._recovery_interval_seconds = recovery_interval_seconds
+        self._last_recovery = 0.0
 
     def recover(self) -> int:
-        return self._queue.recover_inflight()
+        recovered = 0
+        for candidate in self._service.find_expired():
+            try:
+                expired = self._service.expire_lease(candidate.job_id)
+            except (ConcurrentJobUpdateError, InvalidJobTransitionError):
+                continue
+            if expired.status is JobStatus.CANCELLED:
+                self._queue.acknowledge(expired.job_id)
+            elif expired.attempt_count < expired.max_attempts:
+                self._service.retry(expired.job_id)
+                self._queue.retry(expired.job_id)
+            else:
+                self._queue.dead_letter(expired.job_id)
+            recovered += 1
+        self._last_recovery = monotonic()
+        return recovered
 
     def run_once(self) -> bool:
+        if monotonic() - self._last_recovery >= self._recovery_interval_seconds:
+            self.recover()
         job_id = self._queue.dequeue(timeout_seconds=self._poll_timeout_seconds)
         if job_id is None:
             return False
@@ -94,6 +121,7 @@ def create_runtime(settings: Settings | None = None) -> WorkerRuntime:
         queue_name=selected.redis_queue_name,
     )
     service = JobService(repository)
+    worker_id = selected.worker_id or f"worker-{os.getpid()}-{uuid4().hex[:12]}"
     return WorkerRuntime(
         queue,
         service,
@@ -101,8 +129,12 @@ def create_runtime(settings: Settings | None = None) -> WorkerRuntime:
             service,
             storage_root=selected.storage_root,
             media_timeout_seconds=selected.worker_media_timeout_seconds,
+            worker_id=worker_id,
+            lease_duration_seconds=selected.worker_lease_seconds,
+            heartbeat_interval_seconds=selected.worker_heartbeat_seconds,
         ),
         poll_timeout_seconds=selected.worker_poll_timeout_seconds,
+        recovery_interval_seconds=selected.worker_recovery_interval_seconds,
     )
 
 

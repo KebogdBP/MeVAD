@@ -10,9 +10,12 @@ CREATE TABLE IF NOT EXISTS jobs (
     version INTEGER NOT NULL CHECK (version > 0),
     attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
     max_attempts INTEGER NOT NULL DEFAULT 3 CHECK (max_attempts BETWEEN 1 AND 10),
+    lease_owner VARCHAR(128),
+    lease_expires_at TIMESTAMP WITH TIME ZONE,
     result_reference TEXT,
     error_code VARCHAR(64),
     error_message TEXT
 );
 
 CREATE INDEX IF NOT EXISTS ix_jobs_status ON jobs (status);
+CREATE INDEX IF NOT EXISTS ix_jobs_lease_expires_at ON jobs (lease_expires_at);

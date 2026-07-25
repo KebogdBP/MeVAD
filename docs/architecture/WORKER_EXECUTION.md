@@ -103,6 +103,9 @@ Managed yt-dlp передаёт downloaded bytes, total/estimated bytes, speed �
 - executor вызывает cancellation acknowledgement;
 - итоговый state становится `cancelled`.
 
+Тот же polling вызывает throttled PostgreSQL heartbeat. Поэтому download,
+FFmpeg и postprocessing продлевают worker lease даже между progress events.
+
 Если внешняя операция завершилась ошибкой одновременно с cancel request,
 executor предпочитает cancellation acknowledgement, не раскрывая внутренние
 details.
@@ -137,8 +140,7 @@ error_message: The media job exceeded its processing deadline.
 `SqlJobRepository`, `RedisJobQueue` и `WorkerRuntime` теперь связывают API и
 отдельный process. Следующий infrastructure layer требует:
 
-- per-worker atomic lease;
-- worker heartbeat;
+- recovery узкого окна до создания lease;
 - retry backoff и permanent-error classification;
 - recovery зависших running jobs;
 - storage TTL;

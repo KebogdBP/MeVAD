@@ -241,6 +241,51 @@ def test_worker_persists_stable_timeout_error(tmp_path: Path) -> None:
     assert "private" not in failed.error_message
 
 
+def test_executor_claims_and_clears_worker_lease(tmp_path: Path) -> None:
+    service = _service()
+
+    class LeaseInspectingDownloader(FakeVideoDownloader):
+        def download(
+            self,
+            request: VideoDownloadRequest,
+            *,
+            on_progress: ProgressCallback | None = None,
+            cancellation: CancellationToken | None = None,
+        ) -> VideoDownloadResult:
+            leased = service.get("job-1")
+            assert leased.lease_owner == "worker-1"
+            assert leased.lease_expires_at is not None
+            return super().download(
+                request,
+                on_progress=on_progress,
+                cancellation=cancellation,
+            )
+
+    executor = JobExecutor(
+        service,
+        WorkerDependencies(
+            video_downloader=LeaseInspectingDownloader(),
+            audio_extractor=FakeAudioExtractor(),
+            video_cutter=FakeVideoCutter(),
+            loop_maker=FakeLoopMaker(),
+        ),
+        WorkspaceManager(tmp_path),
+        worker_id="worker-1",
+        lease_duration_seconds=60,
+        heartbeat_interval_seconds=1,
+    )
+    job = _create(
+        service,
+        JobOperation.DOWNLOAD_VIDEO,
+        {"quality": "best", "container": "auto"},
+    )
+
+    completed = executor.execute(job.job_id)
+
+    assert completed.status is JobStatus.SUCCEEDED
+    assert completed.lease_owner is None
+
+
 def test_worker_acknowledges_concurrent_cancellation(tmp_path: Path) -> None:
     service = _service()
 

@@ -52,7 +52,33 @@ PostgreSQL хранит полную модель задачи. Redis перен
 processing. После завершения worker вызывает `LREM`. При restart runtime
 возвращает оставшиеся processing entries в ready.
 
-Это at-least-once delivery. Recovery текущего MVP рассчитан на один worker.
+Это at-least-once delivery. PostgreSQL lease отделяет abandoned claim от
+активной работы другого worker.
+
+## Worker leases
+
+При старте attempt worker сохраняет:
+
+```text
+lease_owner
+lease_expires_at
+```
+
+Managed subprocess polling и progress callbacks продлевают deadline с
+настраиваемым интервалом. Heartbeat использует optimistic job version и
+отклоняется для другого owner или уже просроченной lease.
+
+Runtime периодически выбирает из PostgreSQL только истёкшие non-terminal jobs.
+Expired running/processing job получает безопасный `worker_lease_expired`, затем
+обычная retry policy возвращает его в ready либо переносит в dead-letter.
+`cancel_requested` с истёкшей lease завершается как `cancelled`.
+
+Настройки:
+
+- `MEVAD_WORKER_LEASE_SECONDS`;
+- `MEVAD_WORKER_HEARTBEAT_SECONDS`;
+- `MEVAD_WORKER_RECOVERY_INTERVAL_SECONDS`;
+- опциональный `MEVAD_WORKER_ID`.
 
 ## Retry policy
 
@@ -97,8 +123,7 @@ Compose поднимает PostgreSQL, Redis с AOF, API и worker. API/worker �
 
 ## Следующие ограничения
 
-- per-worker lease и heartbeat;
-- безопасное recovery при нескольких workers;
+- claim-to-lease gap recovery;
 - retry backoff и transient/permanent error classification;
 - transactional outbox;
 - migration runner;

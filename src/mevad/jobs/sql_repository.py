@@ -40,6 +40,8 @@ jobs_table = Table(
     Column("version", Integer, nullable=False),
     Column("attempt_count", Integer, nullable=False),
     Column("max_attempts", Integer, nullable=False),
+    Column("lease_owner", String(128)),
+    Column("lease_expires_at", DateTime(timezone=True), index=True),
     Column("result_reference", Text),
     Column("error_code", String(64)),
     Column("error_message", Text),
@@ -95,6 +97,30 @@ class SqlJobRepository:
             if result.rowcount != 1:
                 raise ConcurrentJobUpdateError("Job was updated concurrently.")
 
+    def find_expired(self, *, now: datetime, limit: int) -> tuple[Job, ...]:
+        with self._engine.connect() as connection:
+            rows = (
+                connection.execute(
+                    select(jobs_table)
+                    .where(
+                        jobs_table.c.lease_expires_at.is_not(None),
+                        jobs_table.c.lease_expires_at <= now,
+                        jobs_table.c.status.not_in(
+                            [
+                                JobStatus.SUCCEEDED.value,
+                                JobStatus.FAILED.value,
+                                JobStatus.CANCELLED.value,
+                            ]
+                        ),
+                    )
+                    .order_by(jobs_table.c.lease_expires_at)
+                    .limit(limit)
+                )
+                .mappings()
+                .all()
+            )
+        return tuple(_from_record(dict(row)) for row in rows)
+
 
 def _to_record(job: Job) -> dict[str, Any]:
     return {
@@ -109,6 +135,8 @@ def _to_record(job: Job) -> dict[str, Any]:
         "version": job.version,
         "attempt_count": job.attempt_count,
         "max_attempts": job.max_attempts,
+        "lease_owner": job.lease_owner,
+        "lease_expires_at": job.lease_expires_at,
         "result_reference": job.result_reference,
         "error_code": job.error_code,
         "error_message": job.error_message,
@@ -131,6 +159,10 @@ def _from_record(record: dict[str, Any]) -> Job:
         version=int(record["version"]),
         attempt_count=int(record["attempt_count"]),
         max_attempts=int(record["max_attempts"]),
+        lease_owner=_optional_string(record["lease_owner"]),
+        lease_expires_at=(
+            _as_utc(record["lease_expires_at"]) if record["lease_expires_at"] is not None else None
+        ),
         result_reference=_optional_string(record["result_reference"]),
         error_code=_optional_string(record["error_code"]),
         error_message=_optional_string(record["error_message"]),

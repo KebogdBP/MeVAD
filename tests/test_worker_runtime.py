@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from mevad.jobs import (
     InMemoryJobQueue,
@@ -111,6 +111,62 @@ def test_worker_runtime_dead_letters_exhausted_job() -> None:
     assert runtime.run_once()
     assert queue.dead_letters == ("job-1",)
     assert service.get("job-1").status is JobStatus.FAILED
+
+
+def test_worker_runtime_recovers_only_expired_leases() -> None:
+    now = datetime(2026, 7, 25, 12, 0, tzinfo=UTC)
+    current = now
+
+    def clock() -> datetime:
+        return current
+
+    repository = InMemoryJobRepository()
+    expired = Job(
+        job_id="expired",
+        operation=JobOperation.DOWNLOAD_VIDEO,
+        source_url="https://example.com/video",
+        parameters={"quality": "best"},
+        status=JobStatus.RUNNING,
+        progress_percent=20,
+        created_at=now,
+        updated_at=now,
+        version=2,
+        attempt_count=1,
+        max_attempts=3,
+        lease_owner="dead-worker",
+        lease_expires_at=now - timedelta(seconds=1),
+    )
+    active = Job(
+        job_id="active",
+        operation=JobOperation.DOWNLOAD_VIDEO,
+        source_url="https://example.com/video",
+        parameters={"quality": "best"},
+        status=JobStatus.RUNNING,
+        progress_percent=20,
+        created_at=now,
+        updated_at=now,
+        version=2,
+        attempt_count=1,
+        max_attempts=3,
+        lease_owner="live-worker",
+        lease_expires_at=now + timedelta(seconds=60),
+    )
+    repository.add(expired)
+    repository.add(active)
+    service = JobService(repository, clock=clock)
+    queue = InMemoryJobQueue()
+    runtime = WorkerRuntime(
+        queue,
+        service,
+        FakeExecutor(_job()),
+        poll_timeout_seconds=0,
+    )
+
+    assert runtime.recover() == 1
+    assert service.get("expired").status is JobStatus.QUEUED
+    assert service.get("expired").error_code is None
+    assert service.get("active").status is JobStatus.RUNNING
+    assert queue.dequeue(timeout_seconds=0) == "expired"
 
 
 def _job() -> Job:

@@ -1,7 +1,9 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from mevad.exceptions import InvalidSourceURLError, JobQueueError, MediaAnalysisError
 from mevad.jobs import InMemoryJobQueue, InMemoryJobRepository, JobOperation, JobService
@@ -76,6 +78,11 @@ def test_docs_can_be_disabled() -> None:
 
     assert docs_response.status_code == 404
     assert openapi_response.status_code == 404
+
+
+def test_settings_reject_heartbeat_not_shorter_than_lease() -> None:
+    with pytest.raises(ValidationError, match="heartbeat interval"):
+        _settings(worker_lease_seconds=10, worker_heartbeat_seconds=10)
 
 
 def test_analyzer_is_disabled_by_default_without_calling_adapter() -> None:
