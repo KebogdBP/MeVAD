@@ -117,12 +117,10 @@ error_message: The media job could not be completed.
 
 ## Текущая граница
 
-`InMemoryJobRepository` нельзя разделить между API и отдельным worker process.
-Production execution требует:
+`SqlJobRepository`, `RedisJobQueue` и `WorkerRuntime` теперь связывают API и
+отдельный process. Следующий infrastructure layer требует:
 
-- PostgreSQL repository;
-- Redis queue;
-- atomic claim/lease;
+- per-worker atomic lease;
 - worker heartbeat;
 - retries и dead-letter policy;
 - recovery зависших running jobs;

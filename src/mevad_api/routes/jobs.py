@@ -7,6 +7,7 @@ from mevad.exceptions import (
     InvalidJobTransitionError,
     InvalidSourceURLError,
     JobNotFoundError,
+    JobQueueError,
 )
 from mevad.jobs.models import Job, JobOperation
 from mevad_api.dependencies import JobServiceDependency
@@ -24,7 +25,10 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
     "",
     response_model=JobResponse,
     status_code=status.HTTP_201_CREATED,
-    responses={400: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
+    },
 )
 def create_job(
     payload: CreateJobRequest,
@@ -43,6 +47,12 @@ def create_job(
             status_code=status.HTTP_400_BAD_REQUEST,
             code="invalid_source_url",
             message=str(error),
+        )
+    except JobQueueError:
+        return _error_response(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            code="job_queue_unavailable",
+            message="The media job could not be queued.",
         )
     return _to_response(job)
 

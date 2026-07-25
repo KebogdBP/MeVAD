@@ -7,8 +7,9 @@ from types import MappingProxyType
 from typing import TypeAlias
 from uuid import uuid4
 
-from mevad.exceptions import InvalidJobTransitionError, JobNotFoundError
+from mevad.exceptions import InvalidJobTransitionError, JobNotFoundError, JobQueueError
 from mevad.jobs.models import Job, JobOperation, JobParameter, JobStatus
+from mevad.jobs.queue import JobQueue
 from mevad.jobs.repository import JobRepository
 from mevad.security import normalize_remote_url
 
@@ -23,10 +24,12 @@ class JobService:
         self,
         repository: JobRepository,
         *,
+        queue: JobQueue | None = None,
         clock: Clock | None = None,
         job_id_factory: JobIdFactory | None = None,
     ) -> None:
         self._repository = repository
+        self._queue = queue
         self._clock = clock or _utc_now
         self._job_id_factory = job_id_factory or _new_job_id
 
@@ -50,6 +53,17 @@ class JobService:
             version=1,
         )
         self._repository.add(job)
+        if self._queue is not None:
+            try:
+                self._queue.enqueue(job.job_id)
+            except Exception as error:
+                self._transition(
+                    job,
+                    status=JobStatus.FAILED,
+                    error_code="job_enqueue_failed",
+                    error_message="The media job could not be queued.",
+                )
+                raise JobQueueError("The media job could not be queued.") from error
         return job
 
     def get(self, job_id: str) -> Job:

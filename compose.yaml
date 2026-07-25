@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: mevad
+      POSTGRES_USER: mevad
+      POSTGRES_PASSWORD: mevad
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mevad -d mevad"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./migrations/0001_create_jobs.sql:/docker-entrypoint-initdb.d/0001_create_jobs.sql:ro
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - redis-data:/data
+
+  api:
+    build: .
+    environment: &mevad-environment
+      MEVAD_API_HOST: 0.0.0.0
+      MEVAD_DATABASE_URL: postgresql+psycopg://mevad:mevad@postgres:5432/mevad
+      MEVAD_JOB_BACKEND: postgres
+      MEVAD_QUEUE_BACKEND: redis
+      MEVAD_REDIS_URL: redis://redis:6379/0
+      MEVAD_REQUIRE_MEDIA_TOOLS: "false"
+      MEVAD_STORAGE_ROOT: /app/storage/jobs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - job-storage:/app/storage/jobs
+
+  worker:
+    build: .
+    command: ["mevad-worker"]
+    environment: *mevad-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - job-storage:/app/storage/jobs
+
+volumes:
+  job-storage:
+  postgres-data:
+  redis-data:

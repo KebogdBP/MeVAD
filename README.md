@@ -7,7 +7,7 @@
 
 ## Статус
 
-Проект находится на границе Phase 0 и Phase 1. Уже доступны:
+Проект последовательно проходит backend-фундамент Phase 1–4. Уже доступны:
 
 - устанавливаемый Python-пакет `mevad`;
 - типизированные доменные модели;
@@ -24,8 +24,11 @@
 - FastAPI foundation с health/readiness и versioned API.
 - Job System с типизированными задачами, status polling и отменой.
 - Worker execution layer с dispatch, progress bridge и per-job storage.
+- PostgreSQL job repository с optimistic locking.
+- Redis queue с claim/ack и восстановлением in-flight задач.
+- отдельный worker process и локальный Docker Compose stack.
 
-Durable queue/repository и web-интерфейс ещё не реализованы.
+Web-интерфейс ещё не реализован.
 
 ## Требования
 
@@ -154,10 +157,20 @@ GET  /api/v1/jobs/{job_id}
 POST /api/v1/jobs/{job_id}/cancel
 ```
 
-Сейчас задачи сохраняются в process-local memory и не выполняются. Этот backend
-предназначен только для разработки и тестирования worker contract. Сам
-`JobExecutor` уже выполняет четыре операции, но API и отдельный worker process
-будут связаны только после подключения PostgreSQL/Redis.
+По умолчанию API использует process-local repository и queue для простых тестов.
+Production-intent режим связывает API и worker через PostgreSQL и Redis:
+
+```bash
+docker compose up --build
+```
+
+После запуска API доступен на `http://localhost:8000`. PostgreSQL хранит job
+state, Redis переносит job identifiers, а API и worker используют общий volume
+`storage/jobs`.
+
+Для ручного запуска задайте `MEVAD_JOB_BACKEND=postgres`,
+`MEVAD_QUEUE_BACKEND=redis`, database/Redis URLs, затем запустите
+`uvicorn mevad_api.app:app` и `mevad-worker` отдельно.
 
 ## Проверки
 
@@ -181,6 +194,7 @@ pytest --cov=mevad --cov=mevad_api --cov=mevad_worker --cov-report=term-missing
 - [API Foundation Architecture](docs/architecture/API_FOUNDATION.md)
 - [Job System Architecture](docs/architecture/JOB_SYSTEM.md)
 - [Worker Execution Architecture](docs/architecture/WORKER_EXECUTION.md)
+- [Durable Job Infrastructure](docs/architecture/DURABLE_JOB_INFRASTRUCTURE.md)
 
 ## Планируемая архитектура
 
@@ -200,5 +214,5 @@ FastAPI
       └── FFmpeg
 ```
 
-Разработка начнётся после завершения решений Phase 0, включая стратегию
-использования кода прежнего CLI, lock tool и лицензию.
+Следующий инфраструктурный инкремент добавит leases/heartbeat, retry policy,
+TTL результатов и полноценный migration runner.

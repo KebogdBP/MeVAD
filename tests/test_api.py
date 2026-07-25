@@ -3,8 +3,8 @@ from contextlib import contextmanager
 
 from fastapi.testclient import TestClient
 
-from mevad.exceptions import InvalidSourceURLError, MediaAnalysisError
-from mevad.jobs import InMemoryJobRepository, JobOperation, JobService
+from mevad.exceptions import InvalidSourceURLError, JobQueueError, MediaAnalysisError
+from mevad.jobs import InMemoryJobQueue, InMemoryJobRepository, JobOperation, JobService
 from mevad.models import (
     MediaAction,
     MediaAnalysis,
@@ -247,6 +247,31 @@ def test_job_api_rejects_unsafe_source_before_enqueue() -> None:
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "invalid_source_url"
+
+
+def test_job_api_returns_service_unavailable_when_queue_fails() -> None:
+    class FailingQueue(InMemoryJobQueue):
+        def enqueue(self, job_id: str) -> None:
+            raise JobQueueError("offline")
+
+    service = JobService(
+        InMemoryJobRepository(),
+        queue=FailingQueue(),
+        job_id_factory=lambda: "job-1",
+    )
+    with _client(job_service=service) as client:
+        response = client.post(
+            "/api/v1/jobs",
+            json={
+                "operation": "download_video",
+                "source_url": "https://example.com/video",
+                "options": {"quality": "720p", "container": "mp4"},
+            },
+        )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "job_queue_unavailable"
+    assert service.get("job-1").status.value == "failed"
 
 
 def test_job_api_returns_stable_not_found_error() -> None:

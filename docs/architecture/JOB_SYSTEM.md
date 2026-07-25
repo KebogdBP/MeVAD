@@ -13,12 +13,13 @@ JobRepository
         ↓
 queued job
         ↓
-future worker
+Redis queue
+        ↓
+worker
 ```
 
-Domain, repository contract и HTTP lifecycle дополнены отдельным
-`JobExecutor`. Process-local API repository пока не связан с отдельным worker
-process: для этой границы нужны PostgreSQL/Redis adapters.
+Domain, repository contract и HTTP lifecycle дополнены `JobExecutor`,
+PostgreSQL repository, Redis queue и отдельным worker process.
 
 ## Операции
 
@@ -95,7 +96,7 @@ Update использует optimistic concurrency. Несовпадение ver
 - не разделяется между несколькими API replicas;
 - предназначен только для тестов и разработки.
 
-Production adapter должен использовать PostgreSQL transaction/row version.
+`SqlJobRepository` использует PostgreSQL transaction и row version.
 
 ## HTTP API
 
@@ -126,8 +127,7 @@ POST /api/v1/jobs
 GET /api/v1/jobs/{job_id}
 ```
 
-Клиент использует polling до terminal state. SSE/WebSocket появятся после
-worker.
+Клиент использует polling до terminal state. SSE/WebSocket появятся позже.
 
 ### Отмена
 
@@ -139,13 +139,10 @@ POST /api/v1/jobs/{job_id}/cancel
 - running/processing → cancel_requested;
 - terminal → 409.
 
-## Следующий adapter
+## Следующий инкремент
 
 Production Job System потребует:
 
-- PostgreSQL job repository;
-- Redis broker/queue;
-- отдельный worker process;
 - job claim/lease и heartbeat;
 - retry policy;
 - stale-job recovery;

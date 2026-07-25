@@ -51,3 +51,7 @@ class InvalidJobTransitionError(JobError):
 
 class ConcurrentJobUpdateError(JobError):
     """Raised when optimistic job version validation fails."""
+
+
+class JobQueueError(JobError):
+    """Raised when a job cannot be published to or claimed from the queue."""

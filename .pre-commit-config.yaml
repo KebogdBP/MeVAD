@@ -16,6 +16,8 @@ repos:
           - httpx2==2.7.0
           - pydantic-settings==2.14.2
           - pytest==8.4.1
+          - redis==8.0.1
+          - SQLAlchemy==2.0.51
         pass_filenames: false
 
   - repo: local
