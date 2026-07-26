@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { existsSync } from "node:fs";
 import { readFile, stat, mkdir } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -67,7 +68,13 @@ if (!address || typeof address === "string") {
   throw new Error("Unable to start the Storybook audit server.");
 }
 
-const browserPath = process.env.STORYBOOK_BROWSER_PATH;
+const browserPath = [
+  process.env.STORYBOOK_BROWSER_PATH,
+  chromium.executablePath(),
+  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+  "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+].find((candidate) => candidate && existsSync(candidate));
 const browser = await chromium.launch({
   headless: true,
   executablePath: browserPath || undefined,
@@ -81,6 +88,18 @@ const baseUrl = `http://127.0.0.1:${address.port}`;
 const axePath = require.resolve("axe-core/axe.min.js");
 const violations = [];
 const responsiveFailures = [];
+const interactionFailures = [];
+
+async function openStory(storyId) {
+  await page.goto(`${baseUrl}/iframe.html?id=${storyId}&viewMode=story`, {
+    waitUntil: "networkidle",
+  });
+  await page.waitForSelector("#storybook-root > *");
+}
+
+function requireInteraction(condition, detail) {
+  if (!condition) interactionFailures.push(detail);
+}
 
 async function runAxe(page) {
   for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -232,6 +251,120 @@ try {
     forcedColors: "none",
   });
 
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await openStory("patterns-media-workspace-states--analyzed");
+  const keyboardSequence = [];
+  for (let index = 0; index < 20; index += 1) {
+    await page.keyboard.press("Tab");
+    const activeControl = await page.evaluate(() => {
+      const element = document.activeElement;
+      if (!(element instanceof HTMLElement) || element === document.body) {
+        return null;
+      }
+      const style = getComputedStyle(element);
+      const label =
+        element.getAttribute("aria-label") ||
+        ("labels" in element && element.labels?.length
+          ? Array.from(element.labels)
+              .map((item) => item.textContent?.trim())
+              .filter(Boolean)
+              .join(" ")
+          : "") ||
+        element.innerText.trim();
+      return {
+        label,
+        tag: element.tagName.toLowerCase(),
+        visibleFocus:
+          style.outlineStyle !== "none" ||
+          (style.boxShadow !== "none" && style.boxShadow !== ""),
+      };
+    });
+    if (!activeControl) continue;
+    if (
+      keyboardSequence.length > 0 &&
+      activeControl.label === keyboardSequence[0].label &&
+      activeControl.tag === keyboardSequence[0].tag
+    ) {
+      break;
+    }
+    keyboardSequence.push(activeControl);
+  }
+
+  const keyboardLabels = keyboardSequence.map((item) => item.label);
+  for (const expectedLabel of [
+    "Paste a supported URL",
+    "Analyze",
+    "Video",
+    "Audio",
+    "Clip",
+    "GIF & Loop",
+    "Quality",
+    "Container",
+    "Create Video job",
+  ]) {
+    requireInteraction(
+      keyboardLabels.some((label) => label.includes(expectedLabel)),
+      {
+        check: "keyboard-order",
+        expectedLabel,
+        keyboardLabels,
+      },
+    );
+  }
+  requireInteraction(
+    keyboardSequence.every((item) => item.visibleFocus),
+    {
+      check: "visible-keyboard-focus",
+      controls: keyboardSequence.filter((item) => !item.visibleFocus),
+    },
+  );
+
+  await openStory("patterns-media-workspace-states--analyzing");
+  const analysisStatus = page.getByRole("status");
+  requireInteraction((await analysisStatus.count()) === 1, {
+    check: "screen-reader-analysis-status",
+    count: await analysisStatus.count(),
+  });
+  requireInteraction(
+    (await analysisStatus.textContent())?.includes(
+      "Analyzing media and loading available actions.",
+    ),
+    { check: "screen-reader-analysis-announcement" },
+  );
+
+  await openStory("patterns-media-workspace-states--processing");
+  const jobRegion = page.locator('[aria-label="Media job status"]');
+  const jobProgress = page.getByRole("progressbar", { name: "Job progress" });
+  requireInteraction((await jobRegion.count()) === 1, {
+    check: "screen-reader-job-region",
+  });
+  requireInteraction(
+    (await jobRegion.getAttribute("aria-live")) === "polite",
+    { check: "screen-reader-job-live-region" },
+  );
+  requireInteraction(
+    (await jobProgress.getAttribute("aria-valuenow")) === "64",
+    { check: "screen-reader-job-progress" },
+  );
+  requireInteraction(
+    (await page.getByRole("button", { name: "Cancel" }).count()) === 1,
+    { check: "keyboard-job-cancel" },
+  );
+
+  await openStory("patterns-media-workspace-states--failed");
+  requireInteraction(
+    (await page.getByRole("alert").allTextContents()).some((message) =>
+      message.includes("The source stream could not be converted."),
+    ),
+    { check: "screen-reader-job-error" },
+  );
+
+  await openStory("patterns-media-workspace-states--succeeded");
+  requireInteraction(
+    (await page.getByRole("link", { name: "Download result" }).count()) === 1,
+    { check: "keyboard-download-result" },
+  );
+
   if (screenshotsEnabled) {
     await mkdir(screenshotDirectory, { recursive: true });
     for (const viewport of [
@@ -275,6 +408,13 @@ if (responsiveFailures.length > 0) {
   );
 }
 
+if (interactionFailures.length > 0) {
+  console.error(JSON.stringify(interactionFailures, null, 2));
+  throw new Error(
+    `Keyboard and screen-reader audit found ${interactionFailures.length} failure(s).`,
+  );
+}
+
 console.log(
-  `Storybook audit passed for ${stories.length} stories, five target widths, 200% zoom reflow, reduced motion and forced colors.`,
+  `Storybook audit passed for ${stories.length} stories in light/dark themes, five target widths, 200% zoom reflow, reduced motion, forced colors, keyboard traversal and screen-reader semantics.`,
 );

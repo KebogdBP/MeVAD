@@ -1,6 +1,6 @@
 # Phase 7 — Design System and SaaS UX
 
-**Статус:** in progress (Slices 7.1–7.5)
+**Статус:** complete (Slices 7.1–7.6; release exceptions tracked)
 
 **Входная точка:** commit `219910b`  
 **Vision:** `MEGADOWNLOADER_PROJECT_VISION.md`, разделы 8 и Phase 7
@@ -33,13 +33,13 @@
 - [x] Вынести исходные tokens из `globals.css`.
 - [x] Разделить palette и semantic tokens для light/dark themes.
 - [x] Подключить Inter/Manrope через `next/font`.
-- [ ] Запретить новые raw color/spacing values правилом review/lint.
-- [ ] Документировать правила neumorphism и contrast.
+- [x] Запретить новые raw color/spacing values правилом review/lint.
+- [x] Документировать правила neumorphism и contrast.
 
 ### Slice 7.2 — Component primitives
 
 - [x] Создать `components/ui` с typed variants.
-- [ ] Покрыть keyboard, focus, disabled, loading и error states.
+- [x] Покрыть keyboard, focus, disabled, loading и error states.
 - [x] Обеспечить touch target не меньше 44×44 px.
 - [x] Добавить unit tests для интерактивных контрактов.
 
@@ -67,11 +67,13 @@
 
 ### Slice 7.6 — Accessibility and release audit
 
-- [ ] Полный keyboard-only walkthrough.
-- [ ] Screen reader walkthrough analyze → job → download.
-- [ ] WCAG 2.2 AA contrast report.
-- [ ] Lighthouse/accessibility baseline.
-- [ ] Зафиксировать известные исключения с владельцем и сроком.
+- [x] Полный keyboard-only walkthrough.
+- [x] Screen reader walkthrough analyze → job → download.
+- [x] WCAG 2.2 AA contrast report.
+- [x] Lighthouse/accessibility baseline.
+- [x] Зафиксировать известные исключения с владельцем и сроком.
+
+Итоговый артефакт: `docs/audits/PHASE_7_RELEASE_AUDIT.md`.
 
 ## Definition of Done
 

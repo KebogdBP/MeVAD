@@ -65,6 +65,12 @@ jobs:
       - name: ESLint
         run: npm run lint
 
+      - name: Design-token policy
+        run: npm run lint:tokens
+
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+
       - name: TypeScript
         run: npm run typecheck
 
@@ -82,3 +88,6 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+      - name: Lighthouse release audit
+        run: npm run test:release

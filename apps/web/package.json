@@ -7,10 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "lint:tokens": "node scripts/audit-design-tokens.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:storybook": "node scripts/audit-storybook.mjs",
     "test:storybook:screenshots": "node scripts/audit-storybook.mjs --screenshots",
+    "test:release": "node scripts/audit-release.mjs",
     "storybook": "storybook dev -p 6006 --no-open",
     "build:storybook": "storybook build"
   },
@@ -30,9 +32,14 @@
     "axe-core": "^4.10.3",
     "eslint": "9.39.5",
     "eslint-config-next": "16.2.12",
+    "lighthouse": "13.3.0",
     "playwright": "^1.58.2",
     "storybook": "^10.5.4",
     "typescript": "6.0.3",
     "vitest": "4.1.10"
+  },
+  "overrides": {
+    "postcss": "8.5.23",
+    "sharp": "0.35.0"
   }
 }
