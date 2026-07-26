@@ -8,7 +8,11 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:storybook": "node scripts/audit-storybook.mjs",
+    "test:storybook:screenshots": "node scripts/audit-storybook.mjs --screenshots",
+    "storybook": "storybook dev -p 6006 --no-open",
+    "build:storybook": "storybook build"
   },
   "dependencies": {
     "next": "16.2.12",
@@ -16,11 +20,18 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@storybook/addon-a11y": "^10.5.4",
+    "@storybook/addon-docs": "^10.5.4",
+    "@storybook/addon-themes": "^10.5.4",
+    "@storybook/nextjs-vite": "^10.5.4",
     "@types/node": "26.1.1",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
+    "axe-core": "^4.10.3",
     "eslint": "9.39.5",
     "eslint-config-next": "16.2.12",
+    "playwright": "^1.58.2",
+    "storybook": "^10.5.4",
     "typescript": "6.0.3",
     "vitest": "4.1.10"
   }

@@ -1,6 +1,7 @@
 # Phase 7 — Design System and SaaS UX
 
-**Статус:** ready to start  
+**Статус:** in progress (Slices 7.1–7.3)
+
 **Входная точка:** commit `219910b`  
 **Vision:** `MEGADOWNLOADER_PROJECT_VISION.md`, разделы 8 и Phase 7
 
@@ -44,11 +45,11 @@
 
 ### Slice 7.3 — Storybook and quality gates
 
-- [ ] Подключить Storybook для Next.js.
-- [ ] Добавить stories для всех variants/states.
-- [ ] Включить automated a11y checks.
-- [ ] Зафиксировать desktop/tablet/mobile screenshots.
-- [ ] Добавить Storybook build и a11y gate в CI.
+- [x] Подключить Storybook для Next.js.
+- [x] Добавить stories для всех variants/states.
+- [x] Включить automated a11y checks.
+- [x] Зафиксировать desktop/tablet/mobile screenshots.
+- [x] Добавить Storybook build и a11y gate в CI.
 
 ### Slice 7.4 — Workspace migration
 

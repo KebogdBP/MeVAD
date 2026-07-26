@@ -71,5 +71,14 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      - name: Install Storybook browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Storybook build
+        run: npm run build:storybook
+
+      - name: Storybook accessibility tests
+        run: npm run test:storybook
+
       - name: Production build
         run: npm run build

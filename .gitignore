@@ -18,7 +18,9 @@ dist/
 
 # Node / Next.js
 node_modules/
+.npm-cache/
 .next/
+storybook-static/
 out/
 *.tsbuildinfo
 

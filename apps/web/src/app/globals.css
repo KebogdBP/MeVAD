@@ -57,6 +57,44 @@ main {
   overflow: hidden;
 }
 
+.storybook-baseline {
+  min-height: 100vh;
+  padding: clamp(24px, 5vw, 72px);
+}
+
+.storybook-baseline__card {
+  width: min(920px, 100%);
+  margin-inline: auto;
+  display: grid;
+  gap: var(--space-6);
+}
+
+.storybook-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.storybook-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--space-4);
+}
+
+.storybook-progress {
+  width: min(560px, 100%);
+  display: grid;
+  gap: var(--space-3);
+}
+
+@media (max-width: 720px) {
+  .storybook-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .skip-link {
   position: fixed;
   z-index: 100;
