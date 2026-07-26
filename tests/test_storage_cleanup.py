@@ -123,7 +123,10 @@ def test_cleaner_refuses_symlinked_job_workspace(tmp_path: Path) -> None:
     protected.write_text("keep", encoding="utf-8")
     storage = tmp_path / "storage"
     storage.mkdir()
-    (storage / "job-1").symlink_to(outside, target_is_directory=True)
+    try:
+        (storage / "job-1").symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("Creating symlinks requires an unavailable platform privilege.")
     repository = InMemoryJobRepository()
     service = JobService(
         repository,

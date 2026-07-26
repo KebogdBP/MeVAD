@@ -163,7 +163,10 @@ def test_workspace_refuses_symlinked_result_file(tmp_path: Path) -> None:
     workspace = manager.prepare("job-1")
     outside = tmp_path / "outside.mp4"
     outside.write_bytes(b"private")
-    (workspace.results / "video.mp4").symlink_to(outside)
+    try:
+        (workspace.results / "video.mp4").symlink_to(outside)
+    except OSError:
+        pytest.skip("Creating symlinks requires an unavailable platform privilege.")
 
     with pytest.raises(MediaProcessingError, match="symbolic link"):
         manager.resolve_result("job-1", "job-1/results/video.mp4")

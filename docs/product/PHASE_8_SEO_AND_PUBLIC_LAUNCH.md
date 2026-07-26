@@ -1,6 +1,6 @@
 # Phase 8 — SEO and Public Launch MVP
 
-**Статус:** in progress (Slices 8.1–8.3)
+**Статус:** in progress (Slices 8.1–8.3 complete; 8.4 repository-ready)
 
 **Входная точка:** commit `802c821`
 
@@ -39,6 +39,9 @@
 
 ### Slice 8.4 — Public launch readiness
 
+- [x] Подготовить production Compose overlay, HTTPS ingress и healthchecks.
+- [x] Добавить конфигурируемые Google/Bing verification meta tags.
+- [x] Добавить post-deploy audit и ручной GitHub Actions smoke workflow.
 - [ ] Настроить production domain и deployment.
 - [ ] Проверить Search Console / Bing Webmaster ownership.
 - [ ] Прогнать Rich Results Test и URL Inspection на production.
@@ -63,7 +66,7 @@
 - Storybook accessibility;
 - production dependency audit.
 
-## Launch blockers после Slice 8.3
+## Launch blockers после repository-ready Slice 8.4
 
 - Подтвердить юридическое лицо или оператора продукта и его адрес.
 - Опубликовать приватный email для privacy- и copyright-запросов.
@@ -72,6 +75,13 @@
 - Зафиксировать production-провайдеров, фактическую географию обработки и retention.
 - Выбрать telemetry log destination и retention, затем явно включить оба
   telemetry-флага в production.
+- Выбрать реальный HTTPS domain/host, заполнить `deploy/production.env` и
+  выполнить deployment.
+- Получить Google/Bing verification tokens и подтвердить ownership во внешних
+  кабинетах.
+- Выполнить production Rich Results / URL Inspection и ручную AT-матрицу.
+- Поднять mobile performance с release-floor 50 до целевого уровня 75 либо
+  оформить отдельное принятое launch exception.
 
 Текущий legal copy намеренно маркирован как public-launch draft и не заявляет
 соответствие конкретной юрисдикции или copyright safe-harbor.

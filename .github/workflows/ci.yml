@@ -9,6 +9,27 @@ permissions:
   contents: read
 
 jobs:
+  deployment-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate production Compose overlay
+        env:
+          MEVAD_DOMAIN: mevad.example.com
+          NEXT_PUBLIC_SITE_URL: https://mevad.example.com
+          MEVAD_POSTGRES_PASSWORD: ci-only-password
+          MEVAD_DATABASE_URL: postgresql+psycopg://mevad:ci-only-password@postgres:5432/mevad
+        run: docker compose -f compose.yaml -f compose.production.yaml config --quiet
+
+      - name: Validate Caddy ingress
+        run: >-
+          docker run --rm
+          -e MEVAD_DOMAIN=mevad.example.com
+          -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro"
+          caddy:2.11.4-alpine
+          caddy validate --config /etc/caddy/Caddyfile
+
   backend-quality:
     runs-on: ubuntu-latest
     strategy:

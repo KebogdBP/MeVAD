@@ -1,0 +1,84 @@
+x-production-environment: &production-environment
+  MEVAD_ENVIRONMENT: production
+  MEVAD_API_DOCS_ENABLED: "false"
+  MEVAD_DATABASE_URL: ${MEVAD_DATABASE_URL:?Set MEVAD_DATABASE_URL with URL-encoded credentials}
+  MEVAD_STORAGE_RETENTION_SECONDS: ${MEVAD_STORAGE_RETENTION_SECONDS:-86400}
+
+x-production-service: &production-service
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  postgres:
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${MEVAD_POSTGRES_PASSWORD:?Set MEVAD_POSTGRES_PASSWORD}
+
+  redis:
+    restart: unless-stopped
+
+  egress-proxy:
+    restart: unless-stopped
+
+  migrate:
+    environment:
+      <<: *production-environment
+
+  api:
+    <<: *production-service
+    environment:
+      <<: *production-environment
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  web:
+    <<: *production-service
+    build:
+      args:
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:?Set NEXT_PUBLIC_SITE_URL to the HTTPS canonical origin}
+        NEXT_PUBLIC_MEVAD_TELEMETRY_ENABLED: ${NEXT_PUBLIC_MEVAD_TELEMETRY_ENABLED:-false}
+        NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION: ${NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION:-}
+        NEXT_PUBLIC_BING_SITE_VERIFICATION: ${NEXT_PUBLIC_BING_SITE_VERIFICATION:-}
+    environment:
+      MEVAD_TELEMETRY_MODE: ${MEVAD_TELEMETRY_MODE:-off}
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  worker:
+    <<: *production-service
+    environment:
+      <<: *production-environment
+
+  outbox:
+    <<: *production-service
+    environment:
+      <<: *production-environment
+
+  cleanup:
+    <<: *production-service
+    environment:
+      <<: *production-environment
+
+  caddy:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      MEVAD_DOMAIN: ${MEVAD_DOMAIN:?Set MEVAD_DOMAIN without a scheme}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - frontend
+
+volumes:
+  caddy-data:
+  caddy-config:

@@ -13,6 +13,7 @@
     "test:storybook": "node scripts/audit-storybook.mjs",
     "test:storybook:screenshots": "node scripts/audit-storybook.mjs --screenshots",
     "test:release": "node scripts/audit-release.mjs",
+    "test:production-url": "node scripts/audit-production-url.mjs",
     "storybook": "storybook dev -p 6006 --no-open",
     "build:storybook": "storybook build"
   },

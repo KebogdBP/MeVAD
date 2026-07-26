@@ -7,9 +7,10 @@
 
 ## Статус
 
-Фундамент Phase 1–4, пользовательский Video & Audio MVP из Phase 5 и
-Cutter/GIF workflow из Phase 6 завершены. Сейчас проект находится на Phase 7:
-выделение дизайн-системы и доведение SaaS UX. Уже доступны:
+Фундамент Phase 1–6, дизайн-система Phase 7 и repository scope Phase 8 завершены.
+Сейчас проект находится на Phase 8.4: production-конфигурация готова, а реальный
+domain/deployment, webmaster ownership и внешние launch-проверки ещё ожидаются.
+Уже доступны:
 
 - устанавливаемый Python-пакет `mevad`;
 - типизированные доменные модели;
@@ -242,6 +243,8 @@ npm run build
 - [Phase 0 — Repository Audit and Cleanup](docs/product/PHASE_0_REPOSITORY_AUDIT_AND_CLEANUP.md)
 - [Phase 7 — Design System and SaaS UX](docs/product/PHASE_7_DESIGN_SYSTEM_AND_SAAS_UX.md)
 - [Phase 7 Readiness Audit](docs/audits/PHASE_7_READINESS_AUDIT.md)
+- [Phase 8 — SEO and Public Launch](docs/product/PHASE_8_SEO_AND_PUBLIC_LAUNCH.md)
+- [Phase 8 Public Launch Readiness](docs/audits/PHASE_8_PUBLIC_LAUNCH_READINESS.md)
 - [Initial Repository Audit](docs/audits/INITIAL_REPOSITORY_AUDIT.md)
 - [Smart URL Analyzer Architecture](docs/architecture/SMART_URL_ANALYZER.md)
 - [Video Downloader Architecture](docs/architecture/VIDEO_DOWNLOADER.md)

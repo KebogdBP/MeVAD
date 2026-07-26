@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: mevad
       POSTGRES_USER: mevad
-      POSTGRES_PASSWORD: mevad
+      POSTGRES_PASSWORD: ${MEVAD_POSTGRES_PASSWORD:-mevad}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mevad -d mevad"]
       interval: 5s
@@ -40,7 +40,7 @@ services:
     build: .
     command: ["mevad-migrate"]
     environment:
-      MEVAD_DATABASE_URL: postgresql+psycopg://mevad:mevad@postgres:5432/mevad
+      MEVAD_DATABASE_URL: postgresql+psycopg://mevad:${MEVAD_POSTGRES_PASSWORD:-mevad}@postgres:5432/mevad
       MEVAD_REQUIRE_MEDIA_TOOLS: "false"
     depends_on:
       postgres:
@@ -52,7 +52,9 @@ services:
     build: .
     environment: &mevad-environment
       MEVAD_API_HOST: 0.0.0.0
-      MEVAD_DATABASE_URL: postgresql+psycopg://mevad:mevad@postgres:5432/mevad
+      MEVAD_ENVIRONMENT: ${MEVAD_ENVIRONMENT:-development}
+      MEVAD_API_DOCS_ENABLED: ${MEVAD_API_DOCS_ENABLED:-true}
+      MEVAD_DATABASE_URL: postgresql+psycopg://mevad:${MEVAD_POSTGRES_PASSWORD:-mevad}@postgres:5432/mevad
       MEVAD_JOB_BACKEND: postgres
       MEVAD_QUEUE_BACKEND: redis
       MEVAD_REDIS_URL: redis://redis:6379/0
@@ -69,7 +71,13 @@ services:
       egress-proxy:
         condition: service_started
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     volumes:
       - job-storage:/app/storage/jobs
     networks:
@@ -78,13 +86,26 @@ services:
   web:
     build:
       context: ./apps/web
+      args:
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://mevad.app}
+        NEXT_PUBLIC_MEVAD_TELEMETRY_ENABLED: ${NEXT_PUBLIC_MEVAD_TELEMETRY_ENABLED:-false}
+        NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION: ${NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION:-}
+        NEXT_PUBLIC_BING_SITE_VERIFICATION: ${NEXT_PUBLIC_BING_SITE_VERIFICATION:-}
     environment:
       MEVAD_API_INTERNAL_URL: http://api:8000
+      MEVAD_TELEMETRY_MODE: ${MEVAD_TELEMETRY_MODE:-off}
       NEXT_TELEMETRY_DISABLED: "1"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     networks:
       - backend
       - frontend

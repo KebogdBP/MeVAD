@@ -34,6 +34,10 @@ const themeScript = `
 `;
 const telemetryEnabled =
   process.env.NEXT_PUBLIC_MEVAD_TELEMETRY_ENABLED === "true";
+const googleSiteVerification =
+  process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION?.trim();
+const bingSiteVerification =
+  process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION?.trim();
 
 export const metadata: Metadata = {
   metadataBase: siteConfig.url,
@@ -89,6 +93,16 @@ export const metadata: Metadata = {
       "max-video-preview": -1,
     },
   },
+  ...(googleSiteVerification || bingSiteVerification
+    ? {
+        verification: {
+          ...(googleSiteVerification ? { google: googleSiteVerification } : {}),
+          ...(bingSiteVerification
+            ? { other: { "msvalidate.01": bingSiteVerification } }
+            : {}),
+        },
+      }
+    : {}),
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

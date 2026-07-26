@@ -210,10 +210,18 @@ def test_sql_repository_rejects_duplicate_identifier(
 def test_redis_queue_claim_acknowledge_and_recovery() -> None:
     client = FakeRedis()
     receipts = iter(("delivery-1", "delivery-2"))
+    current = datetime(2026, 7, 26, 12, 0, tzinfo=UTC)
+
+    def advancing_clock() -> datetime:
+        nonlocal current
+        current += timedelta(milliseconds=1)
+        return current
+
     queue = RedisJobQueue(
         client,
         queue_name="test:jobs",
         receipt_factory=lambda: next(receipts),
+        clock=advancing_clock,
     )
 
     queue.enqueue("job-1")

@@ -241,7 +241,7 @@ def _terminate(process: subprocess.Popen[str]) -> None:
         return
     try:
         if os.name == "posix":
-            os.killpg(process.pid, signal.SIGTERM)
+            os.killpg(process.pid, signal.SIGTERM)  # type: ignore[attr-defined]
         else:
             process.terminate()
         process.wait(timeout=2)
@@ -250,7 +250,7 @@ def _terminate(process: subprocess.Popen[str]) -> None:
         pass
     try:
         if os.name == "posix":
-            os.killpg(process.pid, signal.SIGKILL)
+            os.killpg(process.pid, signal.SIGKILL)  # type: ignore[attr-defined]
         else:
             process.kill()
         process.wait(timeout=2)
