@@ -17,7 +17,8 @@ Compose web-контейнер обращается к API по имени се�
 
 - URL Analyzer и карточка метаданных;
 - Video, Audio, Clip и GIF/Loop actions;
-- простые настройки формата, качества и интервала;
+- настройки формата, доступного качества и интервала;
+- приблизительная оценка размера Video и Audio до запуска job;
 - создание job, polling статуса и отмена;
 - same-origin скачивание успешно завершённого результата;
 - responsive интерфейс и базовые accessibility states;
@@ -52,6 +53,13 @@ Next.js proxy сохраняет `Content-Disposition`, content metadata и за
 symbolic links отклоняются. В версии с аккаунтами capability должна быть дополнена
 проверкой владельца или короткоживущей подписью.
 
+Video quality presets строятся из реально обнаруженных analyzer heights.
+Приблизительный video size складывает размер выбранного видеопотока с лучшим
+известным аудиопотоком, если источник требует merge. Audio size рассчитывается
+по duration и выбранному bitrate; для WAV используется ориентир PCM 44.1 kHz
+stereo. Если analyzer не вернул достаточно metadata, UI показывает
+`Size unavailable`, а не выдуманное число.
+
 Переменная `MEVAD_API_INTERNAL_URL` задаёт адрес FastAPI для Next.js server.
 По умолчанию используется `http://127.0.0.1:8000`, в Compose —
 `http://api:8000`.
@@ -59,9 +67,8 @@ symbolic links отклоняются. В версии с аккаунтами c
 ## Следующие продуктовые разрывы
 
 1. component/integration tests с эмуляцией API;
-2. оценка размера выбранного результата;
-3. локальная загрузка файлов;
-4. SEO landing pages и Advanced Mode.
+2. локальная загрузка файлов;
+3. SEO landing pages и Advanced Mode.
 
 ## Dependency risk
 

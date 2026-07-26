@@ -458,6 +458,29 @@ button:disabled {
   background: rgba(255, 255, 255, 0.78);
 }
 
+.field select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.size-estimate {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 10px 2px 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.size-estimate strong {
+  color: var(--ink);
+}
+
+.size-estimate span {
+  margin-left: auto;
+  text-align: right;
+}
+
 .primary-action {
   width: 100%;
   display: flex;
@@ -672,6 +695,16 @@ footer {
   .field-row,
   .trust-grid {
     grid-template-columns: 1fr;
+  }
+
+  .size-estimate {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .size-estimate span {
+    margin-left: 0;
+    text-align: left;
   }
 
   .job-card {

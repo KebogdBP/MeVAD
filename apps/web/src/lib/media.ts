@@ -10,6 +10,16 @@ export type JobOperation =
   | "cut_video"
   | "make_loop";
 
+export interface MediaFormat {
+  format_id: string;
+  extension: string | null;
+  width: number | null;
+  height: number | null;
+  filesize_bytes: number | null;
+  has_video: boolean;
+  has_audio: boolean;
+}
+
 export interface MediaAnalysis {
   source_url: string;
   extractor: string;
@@ -21,15 +31,7 @@ export interface MediaAnalysis {
   webpage_url: string;
   is_playlist: boolean;
   playlist_entry_count: number | null;
-  formats: Array<{
-    format_id: string;
-    extension: string | null;
-    width: number | null;
-    height: number | null;
-    filesize_bytes: number | null;
-    has_video: boolean;
-    has_audio: boolean;
-  }>;
+  formats: MediaFormat[];
   subtitle_languages: string[];
   available_actions: string[];
 }
@@ -77,6 +79,110 @@ export const DEFAULT_OPTIONS: ActionOptions = {
   width: 640,
   fps: 15,
 };
+
+const VIDEO_QUALITIES: Array<{
+  value: ActionOptions["quality"];
+  height: number | null;
+}> = [
+  { value: "best", height: null },
+  { value: "1080p", height: 1080 },
+  { value: "720p", height: 720 },
+  { value: "480p", height: 480 },
+  { value: "360p", height: 360 },
+];
+
+export function availableVideoQualities(
+  formats: MediaFormat[],
+): ActionOptions["quality"][] {
+  const sourceHeights = new Set(
+    formats
+      .filter((format) => format.has_video && format.height !== null)
+      .map((format) => format.height),
+  );
+  return VIDEO_QUALITIES.filter(
+    ({ height }) => height === null || sourceHeights.has(height),
+  ).map(({ value }) => value);
+}
+
+export function estimateVideoSize(
+  formats: MediaFormat[],
+  quality: ActionOptions["quality"],
+  container: ActionOptions["container"],
+): number | null {
+  const targetHeight =
+    VIDEO_QUALITIES.find(({ value }) => value === quality)?.height ?? null;
+  let videoCandidates = formats.filter(
+    (format) =>
+      format.has_video &&
+      format.filesize_bytes !== null &&
+      (targetHeight === null || (format.height !== null && format.height <= targetHeight)),
+  );
+  const preferredExtension = container === "mp4" || container === "webm" ? container : null;
+  if (
+    preferredExtension !== null &&
+    videoCandidates.some((format) => format.extension === preferredExtension)
+  ) {
+    videoCandidates = videoCandidates.filter(
+      (format) => format.extension === preferredExtension,
+    );
+  }
+  const videoOnly = videoCandidates.filter((format) => !format.has_audio);
+  const selectedVideo = [...(videoOnly.length > 0 ? videoOnly : videoCandidates)].sort(
+    compareVideoFormats,
+  )[0];
+  if (!selectedVideo || selectedVideo.filesize_bytes === null) return null;
+  if (selectedVideo.has_audio) return selectedVideo.filesize_bytes;
+
+  let audioCandidates = formats.filter(
+    (format) => format.has_audio && !format.has_video && format.filesize_bytes !== null,
+  );
+  const preferredAudioExtension =
+    container === "mp4" ? "m4a" : container === "webm" ? "webm" : null;
+  if (
+    preferredAudioExtension !== null &&
+    audioCandidates.some((format) => format.extension === preferredAudioExtension)
+  ) {
+    audioCandidates = audioCandidates.filter(
+      (format) => format.extension === preferredAudioExtension,
+    );
+  }
+  const selectedAudio = audioCandidates.sort(
+    (left, right) => (right.filesize_bytes ?? 0) - (left.filesize_bytes ?? 0),
+  )[0];
+  return selectedVideo.filesize_bytes + (selectedAudio?.filesize_bytes ?? 0);
+}
+
+export function estimateAudioSize(
+  durationSeconds: number | null,
+  codec: ActionOptions["codec"],
+  bitrate: ActionOptions["bitrate"],
+): number | null {
+  if (durationSeconds === null || !Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    return null;
+  }
+  const kilobitsPerSecond = codec === "wav" ? 1411.2 : Number(bitrate);
+  return Math.round((durationSeconds * kilobitsPerSecond * 1000) / 8);
+}
+
+export function formatFileSize(bytes: number | null): string {
+  if (bytes === null || !Number.isFinite(bytes) || bytes < 0) return "Size unavailable";
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unit = units[0];
+  for (let index = 1; index < units.length && value >= 1024; index += 1) {
+    value /= 1024;
+    unit = units[index];
+  }
+  return `≈ ${value >= 100 ? value.toFixed(0) : value.toFixed(1)} ${unit}`;
+}
+
+function compareVideoFormats(left: MediaFormat, right: MediaFormat): number {
+  return (
+    (right.height ?? 0) - (left.height ?? 0) ||
+    (right.filesize_bytes ?? 0) - (left.filesize_bytes ?? 0)
+  );
+}
 
 export function buildJobPayload(
   action: MediaAction,

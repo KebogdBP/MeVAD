@@ -7,8 +7,12 @@ import {
   Job,
   MediaAction,
   MediaAnalysis,
+  availableVideoQualities,
   buildJobPayload,
+  estimateAudioSize,
   formatDuration,
+  estimateVideoSize,
+  formatFileSize,
   isResultAvailable,
   readApiError,
   resultDownloadUrl,
@@ -65,6 +69,7 @@ export function MediaWorkspace() {
       if (first) setAction(first.id);
       setOptions((current) => ({
         ...current,
+        quality: "best",
         endSeconds: Math.min(10, result.duration_seconds ?? 10),
       }));
     } catch (cause) {
@@ -201,7 +206,12 @@ export function MediaWorkspace() {
               })}
             </div>
 
-            <ActionFields action={action} options={options} onChange={setOptions} />
+            <ActionFields
+              action={action}
+              analysis={analysis}
+              options={options}
+              onChange={setOptions}
+            />
 
             <button className="primary-action" type="button" onClick={createJob} disabled={busy}>
               {busy ? "Starting…" : `Create ${actions.find((item) => item.id === action)?.label} job`}
@@ -218,51 +228,79 @@ export function MediaWorkspace() {
 
 function ActionFields({
   action,
+  analysis,
   options,
   onChange,
 }: {
   action: MediaAction;
+  analysis: MediaAnalysis;
   options: ActionOptions;
   onChange: (options: ActionOptions) => void;
 }) {
   if (action === "download_video") {
+    const qualities = availableVideoQualities(analysis.formats);
+    const estimatedBytes = estimateVideoSize(
+      analysis.formats,
+      options.quality,
+      options.container,
+    );
     return (
-      <div className="field-row">
-        <SelectField
-          label="Quality"
-          value={options.quality}
-          values={["best", "1080p", "720p", "480p", "360p"]}
-          onChange={(quality) => onChange({ ...options, quality: quality as ActionOptions["quality"] })}
-        />
-        <SelectField
-          label="Container"
-          value={options.container}
-          values={["mp4", "webm", "mkv", "auto"]}
-          onChange={(container) =>
-            onChange({ ...options, container: container as ActionOptions["container"] })
-          }
-        />
-      </div>
+      <>
+        <div className="field-row">
+          <SelectField
+            label="Quality"
+            value={options.quality}
+            values={qualities}
+            onChange={(quality) =>
+              onChange({ ...options, quality: quality as ActionOptions["quality"] })
+            }
+          />
+          <SelectField
+            label="Container"
+            value={options.container}
+            values={["mp4", "webm", "mkv", "auto"]}
+            onChange={(container) =>
+              onChange({ ...options, container: container as ActionOptions["container"] })
+            }
+          />
+        </div>
+        <p className="size-estimate">
+          Estimated download: <strong>{formatFileSize(estimatedBytes)}</strong>
+          <span>Actual size may vary after merging streams.</span>
+        </p>
+      </>
     );
   }
   if (action === "extract_audio") {
+    const estimatedBytes = estimateAudioSize(
+      analysis.duration_seconds,
+      options.codec,
+      options.bitrate,
+    );
     return (
-      <div className="field-row">
-        <SelectField
-          label="Format"
-          value={options.codec}
-          values={["mp3", "m4a", "opus", "wav"]}
-          onChange={(codec) => onChange({ ...options, codec: codec as ActionOptions["codec"] })}
-        />
-        <SelectField
-          label="Bitrate"
-          value={options.bitrate}
-          values={["128", "192", "256", "320"]}
-          onChange={(bitrate) =>
-            onChange({ ...options, bitrate: bitrate as ActionOptions["bitrate"] })
-          }
-        />
-      </div>
+      <>
+        <div className="field-row">
+          <SelectField
+            label="Format"
+            value={options.codec}
+            values={["mp3", "m4a", "opus", "wav"]}
+            onChange={(codec) => onChange({ ...options, codec: codec as ActionOptions["codec"] })}
+          />
+          <SelectField
+            label="Bitrate"
+            value={options.bitrate}
+            values={["128", "192", "256", "320"]}
+            disabled={options.codec === "wav"}
+            onChange={(bitrate) =>
+              onChange({ ...options, bitrate: bitrate as ActionOptions["bitrate"] })
+            }
+          />
+        </div>
+        <p className="size-estimate">
+          Estimated download: <strong>{formatFileSize(estimatedBytes)}</strong>
+          <span>Calculated from duration and output bitrate.</span>
+        </p>
+      </>
     );
   }
   return (
@@ -305,17 +343,23 @@ function SelectField({
   label,
   value,
   values,
+  disabled = false,
   onChange,
 }: {
   label: string;
   value: string;
   values: string[];
+  disabled?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
     <label className="field">
       <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      >
         {values.map((item) => (
           <option value={item} key={item}>
             {item.toUpperCase()}

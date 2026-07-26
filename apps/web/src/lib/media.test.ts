@@ -1,14 +1,48 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_OPTIONS,
+  availableVideoQualities,
   buildJobPayload,
+  estimateAudioSize,
+  estimateVideoSize,
   formatDuration,
+  formatFileSize,
   isResultAvailable,
   readApiError,
   resultDownloadUrl,
 } from "./media";
 
 describe("media workflow helpers", () => {
+  const formats = [
+    {
+      format_id: "video-1080",
+      extension: "mp4",
+      width: 1920,
+      height: 1080,
+      filesize_bytes: 100 * 1024 * 1024,
+      has_video: true,
+      has_audio: false,
+    },
+    {
+      format_id: "video-720",
+      extension: "mp4",
+      width: 1280,
+      height: 720,
+      filesize_bytes: 60 * 1024 * 1024,
+      has_video: true,
+      has_audio: false,
+    },
+    {
+      format_id: "audio",
+      extension: "m4a",
+      width: null,
+      height: null,
+      filesize_bytes: 10 * 1024 * 1024,
+      has_video: false,
+      has_audio: true,
+    },
+  ];
+
   it("builds the backend clip operation from the analyzer action", () => {
     expect(buildJobPayload("cut_clip", "https://example.com/video", DEFAULT_OPTIONS)).toEqual({
       operation: "cut_video",
@@ -64,5 +98,21 @@ describe("media workflow helpers", () => {
     expect(isResultAvailable(job, Date.parse("2026-07-26T12:00:00Z"))).toBe(true);
     expect(isResultAvailable(job, Date.parse("2026-07-26T12:01:00Z"))).toBe(false);
     expect(isResultAvailable({ ...job, result_reference: null }, 0)).toBe(false);
+  });
+
+  it("offers only quality presets present in analyzer formats", () => {
+    expect(availableVideoQualities(formats)).toEqual(["best", "1080p", "720p"]);
+  });
+
+  it("estimates selected video and audio streams without claiming precision", () => {
+    expect(estimateVideoSize(formats, "720p", "mp4")).toBe(70 * 1024 * 1024);
+    expect(formatFileSize(70 * 1024 * 1024)).toBe("≈ 70.0 MB");
+    expect(formatFileSize(null)).toBe("Size unavailable");
+  });
+
+  it("estimates compressed audio and ignores bitrate for WAV", () => {
+    expect(estimateAudioSize(60, "mp3", "192")).toBe(1_440_000);
+    expect(estimateAudioSize(60, "wav", "128")).toBe(10_584_000);
+    expect(estimateAudioSize(null, "mp3", "192")).toBeNull();
   });
 });

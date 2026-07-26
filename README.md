@@ -7,10 +7,9 @@
 
 ## Статус
 
-Backend-фундамент Phase 1–4 завершён. Сейчас проект находится на Phase 5:
-интеграция Video & Audio MVP в пользовательский web-сценарий. Возможности
-Cutter/GIF из Phase 6 уже реализованы в core и выведены в первый интерфейс, но
-сама Phase 6 ещё не закрыта. Уже доступны:
+Фундамент Phase 1–4 и пользовательский Video & Audio MVP из Phase 5 завершены.
+Сейчас проект находится на Phase 6: возможности Cutter/GIF уже реализованы в
+core и выведены в первый интерфейс, но сама фаза ещё не закрыта. Уже доступны:
 
 - устанавливаемый Python-пакет `mevad`;
 - типизированные доменные модели;
@@ -45,6 +44,7 @@ Cutter/GIF из Phase 6 уже реализованы в core и выведен�
 - Next.js web workspace: анализ URL, превью, выбор Video/Audio/Clip/GIF action.
 - создание job, polling прогресса и отмена через server-side API proxy.
 - контролируемая потоковая выдача готового результата с проверкой job state и TTL.
+- выбор реально доступных video quality presets и приблизительная оценка размера.
 - responsive SaaS-интерфейс и отдельные frontend quality gates.
 - proxy-enforced network sandbox для analyzer и media downloads в Compose.
 
