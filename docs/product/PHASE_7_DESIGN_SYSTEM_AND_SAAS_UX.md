@@ -1,6 +1,6 @@
 # Phase 7 — Design System and SaaS UX
 
-**Статус:** in progress (Slices 7.1–7.3)
+**Статус:** in progress (Slices 7.1–7.5)
 
 **Входная точка:** commit `219910b`  
 **Vision:** `MEGADOWNLOADER_PROJECT_VISION.md`, разделы 8 и Phase 7
@@ -61,9 +61,9 @@
 ### Slice 7.5 — Themes and responsive UX
 
 - [x] Реализовать system/light/dark preference без flash.
-- [ ] Добавить доступную мобильную навигацию.
-- [ ] Проверить 320, 375, 768, 1024 и 1440 px.
-- [ ] Проверить zoom 200%, reduced motion и forced colors.
+- [x] Добавить доступную мобильную навигацию.
+- [x] Проверить 320, 375, 768, 1024 и 1440 px.
+- [x] Проверить zoom 200%, reduced motion и forced colors.
 
 ### Slice 7.6 — Accessibility and release audit
 

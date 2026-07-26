@@ -1,5 +1,5 @@
 import { MediaWorkspace } from "@/components/media-workspace";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { SiteHeader } from "@/components/site-header";
 
 export default function HomePage() {
   const structuredData = {
@@ -24,27 +24,7 @@ export default function HomePage() {
       <a className="skip-link" href="#workspace">
         Skip to media workspace
       </a>
-      <header className="site-header">
-        <a className="brand" href="#" aria-label="MeVAD home">
-          <span className="brand-mark" aria-hidden="true">
-            ↓
-          </span>
-          <span className="brand-copy">
-            <strong>MeVAD</strong>
-            <small>Video · Audio · Clips</small>
-          </span>
-        </a>
-        <nav aria-label="Main navigation">
-          <a href="#features">Features</a>
-          <a href="#how-it-works">How it works</a>
-          <a href="#safety">Safety</a>
-        </nav>
-        <ThemeToggle />
-        <a className="header-cta" href="#workspace">
-          Open workspace
-          <span aria-hidden="true">↘</span>
-        </a>
-      </header>
+      <SiteHeader />
 
       <section className="hero-layout" aria-labelledby="hero-title">
         <div className="hero-copy">

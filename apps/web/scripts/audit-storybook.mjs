@@ -80,6 +80,30 @@ const page = await context.newPage();
 const baseUrl = `http://127.0.0.1:${address.port}`;
 const axePath = require.resolve("axe-core/axe.min.js");
 const violations = [];
+const responsiveFailures = [];
+
+async function runAxe(page) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      return await page.evaluate(async () =>
+        globalThis.axe.run(document, {
+          runOnly: {
+            type: "tag",
+            values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"],
+          },
+        }),
+      );
+    } catch (error) {
+      if (
+        !String(error).includes("Axe is already running") ||
+        attempt === 3
+      ) {
+        throw error;
+      }
+      await page.waitForTimeout(250);
+    }
+  }
+}
 
 try {
   for (const story of stories) {
@@ -93,14 +117,7 @@ try {
       }, theme);
       await page.addScriptTag({ path: axePath });
 
-      const result = await page.evaluate(async () =>
-        globalThis.axe.run(document, {
-          runOnly: {
-            type: "tag",
-            values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"],
-          },
-        }),
-      );
+      const result = await runAxe(page);
 
       for (const violation of result.violations) {
         violations.push({
@@ -114,6 +131,106 @@ try {
       }
     }
   }
+
+  const responsiveCases = [
+    "patterns-site-header--menu-open",
+    "patterns-media-workspace-states--empty",
+    "patterns-media-workspace-states--analyzed",
+  ];
+  const responsiveViewports = [
+    { name: "mobile-compact", width: 320, height: 812 },
+    { name: "mobile", width: 375, height: 812 },
+    { name: "zoom-200-reflow", width: 720, height: 900 },
+    { name: "tablet", width: 768, height: 1024 },
+    { name: "laptop", width: 1024, height: 900 },
+    { name: "desktop", width: 1440, height: 1000 },
+  ];
+
+  for (const story of responsiveCases) {
+    for (const viewport of responsiveViewports) {
+      await page.setViewportSize(viewport);
+      await page.goto(`${baseUrl}/iframe.html?id=${story}&viewMode=story`, {
+        waitUntil: "networkidle",
+      });
+      await page.waitForSelector("#storybook-root > *");
+
+      const overflow = await page.evaluate(() => {
+        const viewportWidth = document.documentElement.clientWidth;
+        const menuToggle = document.querySelector(".mobile-nav-toggle");
+        const offenders = Array.from(document.body.querySelectorAll("*"))
+          .filter((element) => {
+            const bounds = element.getBoundingClientRect();
+            return bounds.left < -1 || bounds.right > viewportWidth + 1;
+          })
+          .slice(0, 8)
+          .map((element) => ({
+            tag: element.tagName.toLowerCase(),
+            className:
+              element instanceof HTMLElement ? element.className : "",
+          }));
+        return {
+          documentWidth: document.documentElement.scrollWidth,
+          viewportWidth,
+          offenders,
+          menuDisplay: menuToggle ? getComputedStyle(menuToggle).display : null,
+        };
+      });
+
+      if (overflow.documentWidth > overflow.viewportWidth + 1) {
+        responsiveFailures.push({
+          story,
+          mode: viewport.name,
+          viewport: viewport.width,
+          ...overflow,
+        });
+      }
+
+      if (
+        story === "patterns-site-header--menu-open" &&
+        ((viewport.width <= 900 && overflow.menuDisplay === "none") ||
+          (viewport.width > 900 && overflow.menuDisplay !== "none"))
+      ) {
+        responsiveFailures.push({
+          story,
+          mode: viewport.name,
+          viewport: viewport.width,
+          menuDisplay: overflow.menuDisplay,
+        });
+      }
+    }
+  }
+
+  await page.setViewportSize({ width: 720, height: 900 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(
+    `${baseUrl}/iframe.html?id=patterns-media-workspace-states--analyzing&viewMode=story`,
+    { waitUntil: "networkidle" },
+  );
+  const reducedMotionActive = await page.evaluate(
+    () => matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+  if (!reducedMotionActive) {
+    responsiveFailures.push({ feature: "prefers-reduced-motion" });
+  }
+
+  await page.emulateMedia({
+    reducedMotion: "no-preference",
+    forcedColors: "active",
+  });
+  await page.goto(
+    `${baseUrl}/iframe.html?id=patterns-media-workspace-states--analyzed&viewMode=story`,
+    { waitUntil: "networkidle" },
+  );
+  const forcedColorsActive = await page.evaluate(
+    () => matchMedia("(forced-colors: active)").matches,
+  );
+  if (!forcedColorsActive) {
+    responsiveFailures.push({ feature: "forced-colors" });
+  }
+  await page.emulateMedia({
+    reducedMotion: "no-preference",
+    forcedColors: "none",
+  });
 
   if (screenshotsEnabled) {
     await mkdir(screenshotDirectory, { recursive: true });
@@ -151,6 +268,13 @@ if (violations.length > 0) {
   );
 }
 
+if (responsiveFailures.length > 0) {
+  console.error(JSON.stringify(responsiveFailures, null, 2));
+  throw new Error(
+    `Responsive audit found ${responsiveFailures.length} failure(s).`,
+  );
+}
+
 console.log(
-  `Storybook accessibility audit passed for ${stories.length} stories in light and dark themes.`,
+  `Storybook audit passed for ${stories.length} stories, five target widths, 200% zoom reflow, reduced motion and forced colors.`,
 );
