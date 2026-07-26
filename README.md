@@ -44,6 +44,7 @@ Cutter/GIF из Phase 6 уже реализованы в core и выведен�
 - отдельный worker process и локальный Docker Compose stack.
 - Next.js web workspace: анализ URL, превью, выбор Video/Audio/Clip/GIF action.
 - создание job, polling прогресса и отмена через server-side API proxy.
+- контролируемая потоковая выдача готового результата с проверкой job state и TTL.
 - responsive SaaS-интерфейс и отдельные frontend quality gates.
 - proxy-enforced network sandbox для analyzer и media downloads в Compose.
 
@@ -174,7 +175,12 @@ Job API:
 POST /api/v1/jobs
 GET  /api/v1/jobs/{job_id}
 POST /api/v1/jobs/{job_id}/cancel
+GET  /api/v1/jobs/{job_id}/result
 ```
+
+Result endpoint доступен только для успешно завершённой задачи до истечения TTL.
+Он не раскрывает внутренний storage path, проверяет принадлежность файла workspace
+задачи и отдаёт результат как attachment с `Cache-Control: private, no-store`.
 
 По умолчанию API использует process-local repository и queue для простых тестов.
 Production-intent режим связывает API и worker через PostgreSQL и Redis:

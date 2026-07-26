@@ -356,6 +356,66 @@ def test_job_api_rejects_cancelling_terminal_job() -> None:
     assert response.json()["error"]["code"] == "job_not_cancellable"
 
 
+def test_job_result_streams_completed_file_with_download_headers(tmp_path: Path) -> None:
+    service = JobService(InMemoryJobRepository(), job_id_factory=lambda: "job-1")
+    job = service.create(
+        operation=JobOperation.DOWNLOAD_VIDEO,
+        source_url="https://example.com/video",
+        parameters={"quality": "best"},
+    )
+    service.start(job.job_id)
+    result = tmp_path / "job-1" / "results" / "Example video.mp4"
+    result.parent.mkdir(parents=True)
+    result.write_bytes(b"video")
+    service.succeed(job.job_id, result_reference="job-1/results/Example video.mp4")
+
+    with _client(settings=_settings(storage_root=tmp_path), job_service=service) as client:
+        response = client.get("/api/v1/jobs/job-1/result")
+
+    assert response.status_code == 200
+    assert response.content == b"video"
+    assert response.headers["content-disposition"].startswith("attachment; filename")
+    assert "Example%20video.mp4" in response.headers["content-disposition"]
+    assert response.headers["cache-control"] == "private, no-store"
+    assert response.headers["x-content-type-options"] == "nosniff"
+
+
+def test_job_result_is_not_available_before_success(tmp_path: Path) -> None:
+    service = JobService(InMemoryJobRepository(), job_id_factory=lambda: "job-1")
+    service.create(
+        operation=JobOperation.DOWNLOAD_VIDEO,
+        source_url="https://example.com/video",
+        parameters={"quality": "best"},
+    )
+
+    with _client(settings=_settings(storage_root=tmp_path), job_service=service) as client:
+        response = client.get("/api/v1/jobs/job-1/result")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "job_result_not_ready"
+
+
+def test_job_result_rejects_reference_outside_owning_workspace(tmp_path: Path) -> None:
+    service = JobService(InMemoryJobRepository(), job_id_factory=lambda: "job-1")
+    job = service.create(
+        operation=JobOperation.DOWNLOAD_VIDEO,
+        source_url="https://example.com/video",
+        parameters={"quality": "best"},
+    )
+    service.start(job.job_id)
+    other = tmp_path / "job-2" / "results" / "private.mp4"
+    other.parent.mkdir(parents=True)
+    other.write_bytes(b"private")
+    service.succeed(job.job_id, result_reference="job-2/results/private.mp4")
+
+    with _client(settings=_settings(storage_root=tmp_path), job_service=service) as client:
+        response = client.get("/api/v1/jobs/job-1/result")
+
+    assert response.status_code == 410
+    assert response.json()["error"]["code"] == "job_result_unavailable"
+    assert b"private" not in response.content
+
+
 @contextmanager
 def _client(
     *,

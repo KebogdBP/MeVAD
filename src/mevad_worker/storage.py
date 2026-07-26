@@ -3,7 +3,7 @@
 import re
 import shutil
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from mevad.exceptions import MediaProcessingError
 
@@ -49,6 +49,38 @@ class WorkspaceManager:
         if not resolved.is_file():
             raise MediaProcessingError("Worker result file was not found.")
         return resolved.relative_to(self._storage_root).as_posix()
+
+    def resolve_result(self, job_id: str, reference: str) -> Path:
+        """Resolve a persisted result reference inside its owning job workspace."""
+
+        if _SAFE_JOB_ID.fullmatch(job_id) is None:
+            raise MediaProcessingError("Job identifier is not safe for filesystem storage.")
+        relative = PurePosixPath(reference)
+        if (
+            relative.is_absolute()
+            or ".." in relative.parts
+            or len(relative.parts) < 3
+            or relative.parts[:2] != (job_id, "results")
+        ):
+            raise MediaProcessingError("Job result reference is not safe.")
+
+        results = self._storage_root / job_id / "results"
+        if results.is_symlink():
+            raise MediaProcessingError("Job results directory must not be a symbolic link.")
+        resolved_results = results.resolve()
+        self._ensure_contained(resolved_results)
+
+        candidate = self._storage_root.joinpath(*relative.parts)
+        relative_to_results = candidate.relative_to(results)
+        candidate_parts = [results / relative_to_results.parts[0]]
+        for part in relative_to_results.parts[1:]:
+            candidate_parts.append(candidate_parts[-1] / part)
+        if any(path.is_symlink() for path in candidate_parts):
+            raise MediaProcessingError("Job result file must not be a symbolic link.")
+        resolved = candidate.resolve()
+        if not resolved.is_relative_to(resolved_results) or not resolved.is_file():
+            raise MediaProcessingError("Job result file was not found.")
+        return resolved
 
     def cleanup_intermediate(self, workspace: JobWorkspace) -> None:
         self._ensure_directory(workspace.intermediate)

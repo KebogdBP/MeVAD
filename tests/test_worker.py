@@ -144,6 +144,31 @@ def test_executes_video_download_job(tmp_path: Path) -> None:
     assert (tmp_path / completed.result_reference).read_bytes() == b"video"
 
 
+def test_workspace_resolves_only_regular_result_owned_by_job(tmp_path: Path) -> None:
+    manager = WorkspaceManager(tmp_path)
+    workspace = manager.prepare("job-1")
+    result = workspace.results / "video.mp4"
+    result.write_bytes(b"video")
+
+    assert manager.resolve_result("job-1", "job-1/results/video.mp4") == result.resolve()
+
+    with pytest.raises(MediaProcessingError, match="not safe"):
+        manager.resolve_result("job-1", "job-2/results/video.mp4")
+    with pytest.raises(MediaProcessingError, match="not safe"):
+        manager.resolve_result("job-1", "job-1/results/../../../private.mp4")
+
+
+def test_workspace_refuses_symlinked_result_file(tmp_path: Path) -> None:
+    manager = WorkspaceManager(tmp_path / "storage")
+    workspace = manager.prepare("job-1")
+    outside = tmp_path / "outside.mp4"
+    outside.write_bytes(b"private")
+    (workspace.results / "video.mp4").symlink_to(outside)
+
+    with pytest.raises(MediaProcessingError, match="symbolic link"):
+        manager.resolve_result("job-1", "job-1/results/video.mp4")
+
+
 def test_executes_audio_extraction_job(tmp_path: Path) -> None:
     service, executor = _executor(tmp_path)
     job = _create(

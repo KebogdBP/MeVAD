@@ -1,16 +1,19 @@
 """Background job lifecycle endpoints."""
 
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from mevad.exceptions import (
     InvalidJobTransitionError,
     InvalidSourceURLError,
     JobNotFoundError,
     JobQueueError,
+    MediaProcessingError,
 )
-from mevad.jobs.models import Job, JobOperation
-from mevad_api.dependencies import JobServiceDependency
+from mevad.jobs.models import Job, JobOperation, JobStatus
+from mevad_api.dependencies import JobServiceDependency, WorkspaceManagerDependency
 from mevad_api.schemas import (
     CreateJobRequest,
     ErrorDetail,
@@ -78,6 +81,59 @@ def get_job(
         )
 
 
+@router.get(
+    "/{job_id}/result",
+    response_model=None,
+    response_class=FileResponse,
+    responses={
+        404: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+        410: {"model": ErrorResponse},
+    },
+)
+def download_job_result(
+    job_id: str,
+    service: JobServiceDependency,
+    workspaces: WorkspaceManagerDependency,
+) -> FileResponse | JSONResponse:
+    """Stream one completed, unexpired result from its confined workspace."""
+
+    try:
+        job = service.get(job_id)
+    except JobNotFoundError:
+        return _error_response(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="job_not_found",
+            message="Job was not found.",
+        )
+    if job.status is not JobStatus.SUCCEEDED:
+        return _error_response(
+            status_code=status.HTTP_409_CONFLICT,
+            code="job_result_not_ready",
+            message="The job result is not ready.",
+        )
+    now = datetime.now(UTC)
+    if (
+        job.result_reference is None
+        or job.storage_deleted_at is not None
+        or job.result_expires_at is None
+        or job.result_expires_at <= now
+    ):
+        return _result_unavailable()
+    try:
+        result_path = workspaces.resolve_result(job.job_id, job.result_reference)
+    except MediaProcessingError:
+        return _result_unavailable()
+    return FileResponse(
+        result_path,
+        filename=result_path.name,
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.post(
     "/{job_id}/cancel",
     response_model=JobResponse,
@@ -134,4 +190,12 @@ def _error_response(*, status_code: int, code: str, message: str) -> JSONRespons
     return JSONResponse(
         status_code=status_code,
         content=payload.model_dump(mode="json"),
+    )
+
+
+def _result_unavailable() -> JSONResponse:
+    return _error_response(
+        status_code=status.HTTP_410_GONE,
+        code="job_result_unavailable",
+        message="The job result has expired or is no longer available.",
     )

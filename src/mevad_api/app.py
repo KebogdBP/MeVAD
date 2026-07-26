@@ -16,6 +16,7 @@ from mevad.jobs.sql_repository import SqlJobRepository
 from mevad.runtime import RuntimeTools, discover_runtime_tools
 from mevad_api.config import Settings, get_settings
 from mevad_api.routes import health, jobs, media
+from mevad_worker.storage import WorkspaceManager
 
 
 def create_app(
@@ -47,6 +48,7 @@ def create_app(
     selected_queue = job_queue or _create_queue(selected_settings)
     app.state.job_queue = selected_queue
     app.state.job_service = job_service or _create_job_service(selected_settings, selected_queue)
+    app.state.workspace_manager = WorkspaceManager(selected_settings.storage_root)
     app.router.add_event_handler("shutdown", app.state.job_service.close)
 
     app.include_router(health.router)

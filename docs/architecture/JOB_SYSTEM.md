@@ -156,6 +156,11 @@ GET /api/v1/jobs/{job_id}
 Terminal response содержит `result_expires_at` и `storage_deleted_at`; после
 TTL `result_reference` становится `null`.
 
+Готовый файл выдаётся через `GET /api/v1/jobs/{job_id}/result`. Endpoint требует
+status `succeeded`, действующий `result_expires_at` и confined regular file внутри
+workspace этой задачи. До готовности он отвечает `409`, а после истечения TTL,
+cleanup или потери файла — `410`.
+
 ### Отмена
 
 ```http

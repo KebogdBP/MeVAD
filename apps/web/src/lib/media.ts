@@ -149,3 +149,17 @@ export function readApiError(payload: unknown): string {
   }
   return "Something went wrong. Please try again.";
 }
+
+export function resultDownloadUrl(jobId: string): string {
+  return `/api/backend/jobs/${encodeURIComponent(jobId)}/result`;
+}
+
+export function isResultAvailable(job: Job, now = Date.now()): boolean {
+  return (
+    job.status === "succeeded" &&
+    job.result_reference !== null &&
+    job.storage_deleted_at === null &&
+    job.result_expires_at !== null &&
+    Date.parse(job.result_expires_at) > now
+  );
+}

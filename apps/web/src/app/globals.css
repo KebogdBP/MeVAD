@@ -544,6 +544,39 @@ button:disabled {
   font-size: 12px;
 }
 
+.result-ready {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.result-ready p {
+  margin: -8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.download-result {
+  border-radius: 999px;
+  background: var(--ink);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 9px 14px;
+  text-decoration: none;
+}
+
+.download-result:hover {
+  transform: translateY(-1px);
+}
+
+.download-result:focus-visible {
+  outline: 3px solid var(--peach);
+  outline-offset: 3px;
+}
+
 .trust-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -652,6 +685,16 @@ footer {
 
   .job-card > p {
     grid-column: 1 / -1;
+    margin: 0;
+  }
+
+  .result-ready {
+    grid-column: 1 / -1;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .result-ready p {
     margin: 0;
   }
 

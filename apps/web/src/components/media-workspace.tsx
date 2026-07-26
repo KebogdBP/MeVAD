@@ -9,7 +9,9 @@ import {
   MediaAnalysis,
   buildJobPayload,
   formatDuration,
+  isResultAvailable,
   readApiError,
+  resultDownloadUrl,
 } from "@/lib/media";
 
 const actions: Array<{ id: MediaAction; icon: string; label: string; hint: string }> = [
@@ -349,6 +351,7 @@ function NumberField({
 
 function JobCard({ job, onCancel }: { job: Job; onCancel: () => void }) {
   const terminal = terminalStatuses.has(job.status);
+  const resultAvailable = isResultAvailable(job);
   return (
     <aside className={`job-card ${job.status}`} aria-live="polite">
       <div className="job-status">
@@ -368,13 +371,21 @@ function JobCard({ job, onCancel }: { job: Job; onCancel: () => void }) {
         </button>
       )}
       {job.error_message && <p>{job.error_message}</p>}
-      {job.status === "succeeded" && (
-        <p>
-          Result ready
-          {job.result_expires_at
-            ? ` · expires ${new Date(job.result_expires_at).toLocaleString()}`
-            : ""}
-        </p>
+      {job.status === "succeeded" && resultAvailable && (
+        <div className="result-ready">
+          <p>
+            Result ready
+            {job.result_expires_at
+              ? ` · expires ${new Date(job.result_expires_at).toLocaleString()}`
+              : ""}
+          </p>
+          <a className="download-result" href={resultDownloadUrl(job.job_id)}>
+            Download result
+          </a>
+        </div>
+      )}
+      {job.status === "succeeded" && !resultAvailable && (
+        <p>The result has expired or is no longer available.</p>
       )}
     </aside>
   );
