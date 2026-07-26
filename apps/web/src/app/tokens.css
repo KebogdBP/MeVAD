@@ -10,6 +10,7 @@
   --color-coral-600: #ef7056;
   --color-mint-300: #b8ded5;
   --color-teal-600: #2f857c;
+  --color-teal-800: #236b64;
   --color-gold-300: #ead39d;
 
   /* Semantic color tokens */
@@ -24,6 +25,7 @@
   --peach-deep: var(--color-coral-600);
   --mint: var(--color-mint-300);
   --teal: var(--color-teal-600);
+  --teal-strong: var(--color-teal-800);
   --gold: var(--color-gold-300);
   --success: #3f8d70;
   --danger: #b65549;
@@ -73,6 +75,7 @@
   --peach-deep: #ff8a6c;
   --mint: #7fb8aa;
   --teal: #75c4b2;
+  --teal-strong: #286f66;
   --gold: #d9bd80;
   --success: #75c4a0;
   --danger: #ff9588;

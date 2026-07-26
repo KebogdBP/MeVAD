@@ -1,4 +1,24 @@
-import { useId } from "react";
+import { useId, type InputHTMLAttributes } from "react";
+
+export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+  invalid?: boolean;
+}
+
+export function Input({
+  invalid = false,
+  className,
+  ...props
+}: InputProps) {
+  const classes = ["ui-input", className].filter(Boolean).join(" ");
+
+  return (
+    <input
+      className={classes}
+      aria-invalid={invalid || undefined}
+      {...props}
+    />
+  );
+}
 
 interface SelectFieldProps {
   label: string;

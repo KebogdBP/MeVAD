@@ -83,29 +83,35 @@ const violations = [];
 
 try {
   for (const story of stories) {
-    await page.goto(`${baseUrl}/iframe.html?id=${story.id}&viewMode=story`, {
-      waitUntil: "networkidle",
-    });
-    await page.waitForSelector("#storybook-root > *");
-    await page.addScriptTag({ path: axePath });
-
-    const result = await page.evaluate(async () =>
-      globalThis.axe.run(document, {
-        runOnly: {
-          type: "tag",
-          values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"],
-        },
-      }),
-    );
-
-    for (const violation of result.violations) {
-      violations.push({
-        story: story.id,
-        rule: violation.id,
-        impact: violation.impact,
-        help: violation.help,
-        targets: violation.nodes.flatMap((node) => node.target),
+    for (const theme of ["light", "dark"]) {
+      await page.goto(`${baseUrl}/iframe.html?id=${story.id}&viewMode=story`, {
+        waitUntil: "networkidle",
       });
+      await page.waitForSelector("#storybook-root > *");
+      await page.evaluate((activeTheme) => {
+        document.documentElement.dataset.theme = activeTheme;
+      }, theme);
+      await page.addScriptTag({ path: axePath });
+
+      const result = await page.evaluate(async () =>
+        globalThis.axe.run(document, {
+          runOnly: {
+            type: "tag",
+            values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"],
+          },
+        }),
+      );
+
+      for (const violation of result.violations) {
+        violations.push({
+          story: story.id,
+          theme,
+          rule: violation.id,
+          impact: violation.impact,
+          help: violation.help,
+          targets: violation.nodes.flatMap((node) => node.target),
+        });
+      }
     }
   }
 
@@ -146,5 +152,5 @@ if (violations.length > 0) {
 }
 
 console.log(
-  `Storybook accessibility audit passed for ${stories.length} stories.`,
+  `Storybook accessibility audit passed for ${stories.length} stories in light and dark themes.`,
 );

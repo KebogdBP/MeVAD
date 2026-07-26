@@ -57,6 +57,17 @@ main {
   overflow: hidden;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .storybook-baseline {
   min-height: 100vh;
   padding: clamp(24px, 5vw, 72px);
@@ -87,6 +98,36 @@ main {
   width: min(560px, 100%);
   display: grid;
   gap: var(--space-3);
+}
+
+.storybook-workspace-stage {
+  min-height: 100vh;
+  padding: clamp(18px, 5vw, 64px);
+}
+
+.storybook-workspace-stage .workspace-shell {
+  width: min(860px, 100%);
+  margin-inline: auto;
+}
+
+.storybook-input {
+  width: min(420px, calc(100vw - 48px));
+  display: grid;
+  gap: var(--space-2);
+}
+
+.storybook-input .ui-input {
+  width: 100%;
+  min-height: var(--control-min-size);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  background: var(--card-solid);
+}
+
+.storybook-input small {
+  color: var(--danger);
 }
 
 @media (max-width: 720px) {
@@ -439,7 +480,7 @@ nav a:hover::after {
   place-items: center;
   border-radius: 50%;
   color: white;
-  background: var(--teal);
+  background: var(--teal-strong);
   font-size: 10px;
   font-weight: 800;
 }
@@ -880,6 +921,78 @@ button:disabled {
   margin-top: 16px;
 }
 
+.workspace-loading {
+  display: grid;
+  grid-template-columns: minmax(210px, 0.72fr) minmax(340px, 1.28fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.skeleton-media-card,
+.skeleton-action-panel {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.skeleton-media-card > div {
+  display: grid;
+  gap: 11px;
+  padding: 16px;
+}
+
+.skeleton-action-panel {
+  display: grid;
+  gap: 13px;
+  padding: 16px;
+}
+
+.skeleton-action-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+}
+
+.ui-skeleton {
+  min-height: 12px;
+  display: block;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--muted) 12%, var(--card-solid));
+  isolation: isolate;
+}
+
+.ui-skeleton::after {
+  width: 55%;
+  height: 100%;
+  display: block;
+  content: "";
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, white 72%, transparent),
+    transparent
+  );
+  transform: translateX(-120%);
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-thumbnail {
+  min-height: 190px;
+  border-radius: 0;
+}
+
+.skeleton-action-grid .ui-skeleton {
+  min-height: 96px;
+  border-radius: var(--radius-md);
+}
+
+.skeleton-control {
+  min-height: 38px;
+  border-radius: var(--radius-sm);
+}
+
 .media-card,
 .action-panel {
   border: 1px solid var(--line);
@@ -1006,9 +1119,10 @@ button:disabled {
 }
 
 .action-card small {
-  color: var(--muted);
-  font-size: 8px;
-  line-height: 1.3;
+  color: var(--ink);
+  font-size: 9px;
+  font-weight: 520;
+  line-height: 1.35;
 }
 
 .action-card.selected {
@@ -1144,6 +1258,25 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.8);
+}
+
+.job-progress {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.job-progress small {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.job-card--loading {
+  grid-template-columns: auto 1fr auto;
+}
+
+.skeleton-progress {
+  min-height: 6px;
 }
 
 .job-status {
@@ -1535,6 +1668,8 @@ footer > a:last-child {
 [data-theme="dark"] .workspace-shell::before,
 [data-theme="dark"] .media-card,
 [data-theme="dark"] .action-panel,
+[data-theme="dark"] .skeleton-media-card,
+[data-theme="dark"] .skeleton-action-panel,
 [data-theme="dark"] .empty-actions > span,
 [data-theme="dark"] .progress-demo,
 [data-theme="dark"] .job-card {
@@ -1611,6 +1746,12 @@ footer > a:last-child {
   to {
     transform: scale(1.08);
     opacity: 0.82;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  to {
+    transform: translateX(230%);
   }
 }
 
@@ -1750,7 +1891,8 @@ footer > a:last-child {
   }
 
   .workspace-empty,
-  .workspace-content {
+  .workspace-content,
+  .workspace-loading {
     grid-template-columns: 1fr;
   }
 
@@ -1763,6 +1905,10 @@ footer > a:last-child {
   }
 
   .action-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .skeleton-action-grid {
     grid-template-columns: 1fr 1fr;
   }
 

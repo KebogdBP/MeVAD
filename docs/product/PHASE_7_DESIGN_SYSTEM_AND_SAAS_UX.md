@@ -53,10 +53,10 @@
 
 ### Slice 7.4 — Workspace migration
 
-- [ ] Разделить orchestration и presentation в `media-workspace.tsx`.
-- [ ] Перевести URL form, action selector, fields и job states на primitives.
-- [ ] Добавить skeleton для анализа и запуска job.
-- [ ] Устранить layout shift и унифицировать status/error copy.
+- [x] Разделить orchestration и presentation в `media-workspace.tsx`.
+- [x] Перевести URL form, action selector, fields и job states на primitives.
+- [x] Добавить skeleton для анализа и запуска job.
+- [x] Устранить layout shift и унифицировать status/error copy.
 
 ### Slice 7.5 — Themes and responsive UX
 
