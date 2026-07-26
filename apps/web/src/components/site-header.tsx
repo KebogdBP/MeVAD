@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   useEffect,
   useRef,
@@ -11,9 +12,10 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
 const navigation = [
-  { href: "#features", label: "Features" },
-  { href: "#how-it-works", label: "How it works" },
-  { href: "#safety", label: "Safety" },
+  { href: "/#features", label: "Features" },
+  { href: "/video-downloader", label: "Tools" },
+  { href: "/#how-it-works", label: "How it works" },
+  { href: "/#safety", label: "Safety" },
 ] as const;
 
 export function SiteHeader() {
@@ -68,7 +70,7 @@ export function SiteHeaderView({
 }: SiteHeaderViewProps) {
   return (
     <header className="site-header">
-      <a className="brand" href="#" aria-label="MeVAD home">
+      <Link className="brand" href="/" aria-label="MeVAD home">
         <span className="brand-mark" aria-hidden="true">
           ↓
         </span>
@@ -76,7 +78,7 @@ export function SiteHeaderView({
           <strong>MeVAD</strong>
           <small>Video · Audio · Clips</small>
         </span>
-      </a>
+      </Link>
 
       <nav
         className="main-nav"
@@ -85,28 +87,28 @@ export function SiteHeaderView({
         data-open={menuOpen || undefined}
       >
         {navigation.map((item) => (
-          <a
+          <Link
             key={item.href}
             href={item.href}
             onClick={onNavigate}
           >
             {item.label}
-          </a>
+          </Link>
         ))}
-        <a
+        <Link
           className="mobile-nav-cta"
-          href="#workspace"
+          href="/#workspace"
           onClick={onNavigate}
         >
           Open workspace
-        </a>
+        </Link>
       </nav>
 
       <ThemeToggle />
-      <a className="header-cta" href="#workspace">
+      <Link className="header-cta" href="/#workspace">
         Open workspace
         <span aria-hidden="true">↘</span>
-      </a>
+      </Link>
       <Button
         ref={menuButtonRef}
         className="mobile-nav-toggle"

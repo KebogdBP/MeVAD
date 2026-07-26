@@ -21,6 +21,16 @@ const thresholds = {
     seo: 0.9,
   },
 };
+const publicPaths = [
+  "/",
+  "/video-downloader",
+  "/audio-downloader",
+  "/video-cutter",
+  "/video-to-gif",
+];
+const publicOrigin = (
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://mevad.app"
+).replace(/\/$/, "");
 
 const browserPath = [
   process.env.CHROME_PATH,
@@ -172,6 +182,73 @@ async function runLighthouse({ url, mode, reportPath, browserPort }) {
   return { scores, metrics };
 }
 
+async function auditSeoRoutes(origin) {
+  const failures = [];
+
+  for (const pathname of publicPaths) {
+    const response = await fetch(`${origin}${pathname}`);
+    const html = await response.text();
+    const canonical =
+      pathname === "/" ? publicOrigin : `${publicOrigin}${pathname}`;
+    const jsonLdBlocks = [
+      ...html.matchAll(
+        /<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g,
+      ),
+    ];
+
+    if (!response.ok) {
+      failures.push({ pathname, check: "status", status: response.status });
+    }
+    if ((html.match(/<h1[\s>]/g) ?? []).length !== 1) {
+      failures.push({ pathname, check: "single-h1" });
+    }
+    if (!/<title>[^<]{20,}<\/title>/.test(html)) {
+      failures.push({ pathname, check: "title" });
+    }
+    if (!/<meta name="description" content="[^"]{80,}"/.test(html)) {
+      failures.push({ pathname, check: "description" });
+    }
+    if (!html.includes(`<link rel="canonical" href="${canonical}"`)) {
+      failures.push({ pathname, check: "canonical", expected: canonical });
+    }
+    if (!html.includes(`property="og:image" content="${publicOrigin}/og.png"`)) {
+      failures.push({ pathname, check: "open-graph-image" });
+    }
+    if (jsonLdBlocks.length === 0) {
+      failures.push({ pathname, check: "structured-data" });
+    }
+    for (const [, block] of jsonLdBlocks) {
+      try {
+        JSON.parse(block);
+      } catch {
+        failures.push({ pathname, check: "structured-data-json" });
+      }
+    }
+  }
+
+  const robots = await (await fetch(`${origin}/robots.txt`)).text();
+  const sitemap = await (await fetch(`${origin}/sitemap.xml`)).text();
+  if (!robots.includes(`Sitemap: ${publicOrigin}/sitemap.xml`)) {
+    failures.push({ pathname: "/robots.txt", check: "sitemap-reference" });
+  }
+  for (const pathname of publicPaths) {
+    const expected =
+      pathname === "/" ? `${publicOrigin}/` : `${publicOrigin}${pathname}`;
+    if (!sitemap.includes(`<loc>${expected}</loc>`)) {
+      failures.push({ pathname: "/sitemap.xml", check: "route", expected });
+    }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(
+      `Technical SEO audit failed:\n${JSON.stringify(failures, null, 2)}`,
+    );
+  }
+  console.log(
+    `Technical SEO audit passed for ${publicPaths.length} public routes, robots.txt and sitemap.xml.`,
+  );
+}
+
 const appPort = await freePort();
 const url = `http://127.0.0.1:${appPort}`;
 const reportsDirectory = await mkdtemp(path.join(tmpdir(), "mevad-lighthouse-"));
@@ -196,6 +273,7 @@ let auditBrowser;
 
 try {
   await waitForApplication(url, application, () => serverOutput);
+  await auditSeoRoutes(url);
   auditBrowser = await launchAuditBrowser(
     path.join(reportsDirectory, "browser-profile"),
   );

@@ -83,8 +83,7 @@ size — эвристика по разрешению, FPS, длительнос
 
 ## Dependency risk
 
-На момент фиксации `npm audit` сообщает high advisories для транзитивных
-`postcss` и `sharp` в Next.js 16.2.12. Предлагаемый npm auto-fix откатывает
-Next.js до несовместимой версии 9.3.3, поэтому он не применяется. Версии
-зафиксированы lockfile; advisory нужно пересмотреть при следующем совместимом
-релизе Next.js.
+Next.js 16.2.12 фиксировал уязвимые транзитивные версии `postcss` и `sharp`.
+Проект использует совместимые overrides `postcss@8.5.23` и `sharp@0.35.0`;
+`npm audit --omit=dev --audit-level=high` входит в CI и подтверждает отсутствие
+известных production-уязвимостей.

@@ -11,6 +11,9 @@
 - Component-local dynamic values are allowed only when they represent content
   data rather than styling decisions, for example a media duration or calculated
   progress percentage.
+- Phase 8 adds reviewed responsive layout bounds for the task landing template
+  and manifest theme colors. Component colors and reusable spacing still use the
+  existing semantic tokens; the updated fingerprint freezes these additions.
 
 ## Neumorphism
 

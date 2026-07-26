@@ -1,11 +1,18 @@
+import Link from "next/link";
+
 import { MediaWorkspace } from "@/components/media-workspace";
+import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { absoluteUrl } from "@/lib/site";
+import { toolPages } from "@/lib/tool-pages";
 
 export default function HomePage() {
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "WebApplication",
+    "@id": `${absoluteUrl("/")}#application`,
     name: "MeVAD",
+    url: absoluteUrl("/"),
     applicationCategory: "MultimediaApplication",
     operatingSystem: "Any",
     browserRequirements: "Requires a modern web browser",
@@ -17,6 +24,7 @@ export default function HomePage() {
       "Precise clip cutting",
       "GIF and video loops",
     ],
+    isAccessibleForFree: true,
   };
 
   return (
@@ -160,18 +168,33 @@ export default function HomePage() {
         </ol>
       </section>
 
-      <footer>
-        <a className="brand footer-brand" href="#" aria-label="MeVAD home">
-          <span className="brand-mark" aria-hidden="true">↓</span>
-          <span className="brand-copy"><strong>MeVAD</strong><small>Media workspace</small></span>
-        </a>
-        <p>Built for clarity, control and temporary media processing.</p>
-        <a href="https://github.com/KebogdBP/MeVAD">View source</a>
-      </footer>
+      <section className="tool-directory" aria-labelledby="tools-title">
+        <div className="section-heading compact">
+          <span>Explore by task</span>
+          <h2 id="tools-title">A focused page for every core media action.</h2>
+          <p>Start with the outcome you need, then use the same secure workspace.</p>
+        </div>
+        <div className="tool-link-grid">
+          {toolPages.map((tool) => (
+            <Link href={`/${tool.slug}`} key={tool.slug}>
+              <span aria-hidden="true">{tool.icon}</span>
+              <div>
+                <strong>{tool.name}</strong>
+                <small>{tool.description}</small>
+              </div>
+              <b aria-hidden="true">→</b>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <SiteFooter />
 
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(structuredData).replace(/</g, "\\u003c"),
+        }}
       />
     </main>
   );
