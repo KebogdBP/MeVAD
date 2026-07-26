@@ -1,7 +1,35 @@
 import type { Metadata } from "next";
+import { Inter, Manrope } from "next/font/google";
 import type { ReactNode } from "react";
 import "./tokens.css";
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+});
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-manrope",
+});
+
+const themeScript = `
+  (() => {
+    try {
+      const saved = localStorage.getItem("mevad-theme");
+      const theme = saved === "light" || saved === "dark"
+        ? saved
+        : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.style.colorScheme = theme;
+    } catch {
+      document.documentElement.dataset.theme = "light";
+    }
+  })();
+`;
 
 export const metadata: Metadata = {
   title: {
@@ -39,7 +67,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      className={`${inter.variable} ${manrope.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body>{children}</body>
     </html>
   );

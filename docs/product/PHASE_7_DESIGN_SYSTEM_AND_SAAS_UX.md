@@ -30,17 +30,17 @@
 ### Slice 7.1 — Foundations
 
 - [x] Вынести исходные tokens из `globals.css`.
-- [ ] Разделить palette и semantic tokens для light/dark themes.
-- [ ] Подключить Inter/Manrope через `next/font`.
+- [x] Разделить palette и semantic tokens для light/dark themes.
+- [x] Подключить Inter/Manrope через `next/font`.
 - [ ] Запретить новые raw color/spacing values правилом review/lint.
 - [ ] Документировать правила neumorphism и contrast.
 
 ### Slice 7.2 — Component primitives
 
-- [ ] Создать `components/ui` с typed variants.
+- [x] Создать `components/ui` с typed variants.
 - [ ] Покрыть keyboard, focus, disabled, loading и error states.
-- [ ] Обеспечить touch target не меньше 44×44 px.
-- [ ] Добавить unit tests для интерактивных контрактов.
+- [x] Обеспечить touch target не меньше 44×44 px.
+- [x] Добавить unit tests для интерактивных контрактов.
 
 ### Slice 7.3 — Storybook and quality gates
 
@@ -59,7 +59,7 @@
 
 ### Slice 7.5 — Themes and responsive UX
 
-- [ ] Реализовать system/light/dark preference без flash.
+- [x] Реализовать system/light/dark preference без flash.
 - [ ] Добавить доступную мобильную навигацию.
 - [ ] Проверить 320, 375, 768, 1024 и 1440 px.
 - [ ] Проверить zoom 200%, reduced motion и forced colors.

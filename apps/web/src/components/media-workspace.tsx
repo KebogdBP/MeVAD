@@ -1,6 +1,14 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  CheckboxField,
+  NumberField,
+  SelectField,
+} from "@/components/ui/field";
+import { Progress } from "@/components/ui/progress";
 import {
   ActionOptions,
   DEFAULT_OPTIONS,
@@ -145,9 +153,15 @@ export function MediaWorkspace() {
             value={url}
             onChange={(event) => setUrl(event.target.value)}
           />
-          <button type="submit" disabled={busy}>
-            {busy && !analysis ? "Analyzing…" : "Analyze"}
-          </button>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={busy}
+            loading={busy && !analysis}
+            loadingLabel="Analyzing…"
+          >
+            Analyze
+          </Button>
         </div>
         <p>Nothing downloads before you choose an action.</p>
       </form>
@@ -208,7 +222,9 @@ export function MediaWorkspace() {
               <span>{formatDuration(analysis.duration_seconds)}</span>
             </div>
             <div className="media-copy">
-              <span className="source-badge">{analysis.extractor}</span>
+              <Badge tone="accent" className="source-badge">
+                {analysis.extractor}
+              </Badge>
               <h2>{analysis.title}</h2>
               <p>{analysis.author ?? "Unknown creator"}</p>
               <dl>
@@ -227,7 +243,7 @@ export function MediaWorkspace() {
           <div className="action-panel">
             <div className="panel-heading">
               <span>Choose what to make</span>
-              <small>Simple mode</small>
+              <Badge tone="success">Simple mode</Badge>
             </div>
             <div className="action-grid">
               {actions.map((item) => {
@@ -262,15 +278,19 @@ export function MediaWorkspace() {
               </p>
             )}
 
-            <button
+            <Button
               className="primary-action"
+              variant="primary"
+              size="lg"
               type="button"
               onClick={createJob}
               disabled={busy || actionError !== null}
+              loading={busy}
+              loadingLabel="Starting…"
             >
-              {busy ? "Starting…" : `Create ${actions.find((item) => item.id === action)?.label} job`}
+              {`Create ${actions.find((item) => item.id === action)?.label} job`}
               <span aria-hidden="true">→</span>
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -490,84 +510,6 @@ function ActionFields({
   );
 }
 
-function SelectField({
-  label,
-  value,
-  values,
-  disabled = false,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  values: string[];
-  disabled?: boolean;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="field">
-      <span>{label}</span>
-      <select
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {values.map((item) => (
-          <option value={item} key={item}>
-            {item.toUpperCase()}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function NumberField({
-  label,
-  value,
-  max,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  max?: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <label className="field">
-      <span>{label}</span>
-      <input
-        type="number"
-        min={0}
-        max={max}
-        step="0.1"
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-    </label>
-  );
-}
-
-function CheckboxField({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <label className="checkbox-field">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-      />
-      <span>{label}</span>
-    </label>
-  );
-}
-
 function JobCard({ job, onCancel }: { job: Job; onCancel: () => void }) {
   const terminal = terminalStatuses.has(job.status);
   const resultAvailable = isResultAvailable(job);
@@ -577,24 +519,25 @@ function JobCard({ job, onCancel }: { job: Job; onCancel: () => void }) {
         <span className="pulse" aria-hidden="true" />
         <div>
           <small>Job status</small>
-          <strong>{job.status.replace("_", " ")}</strong>
+          <Badge
+            tone={
+              job.status === "succeeded"
+                ? "success"
+                : job.status === "failed" || job.status === "cancelled"
+                  ? "danger"
+                  : "accent"
+            }
+          >
+            {job.status.replace("_", " ")}
+          </Badge>
         </div>
       </div>
-      <div
-        className="progress-track"
-        role="progressbar"
-        aria-label="Job progress"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={job.progress_percent}
-      >
-        <span style={{ width: `${job.progress_percent}%` }} />
-      </div>
+      <Progress value={job.progress_percent} label="Job progress" />
       <b>{job.progress_percent}%</b>
       {!terminal && (
-        <button type="button" onClick={onCancel}>
+        <Button type="button" variant="secondary" size="sm" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
       )}
       {job.error_message && <p>{job.error_message}</p>}
       {job.status === "succeeded" && resultAvailable && (

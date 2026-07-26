@@ -1,4 +1,5 @@
 import { MediaWorkspace } from "@/components/media-workspace";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function HomePage() {
   const structuredData = {
@@ -38,6 +39,7 @@ export default function HomePage() {
           <a href="#how-it-works">How it works</a>
           <a href="#safety">Safety</a>
         </nav>
+        <ThemeToggle />
         <a className="header-cta" href="#workspace">
           Open workspace
           <span aria-hidden="true">↘</span>
