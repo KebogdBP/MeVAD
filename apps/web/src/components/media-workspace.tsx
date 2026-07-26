@@ -116,11 +116,26 @@ export function MediaWorkspace() {
   }
 
   return (
-    <section className="workspace-shell" id="workspace" aria-label="Media workspace">
+    <section
+      className="workspace-shell"
+      id="workspace"
+      aria-label="Media workspace"
+      aria-busy={busy}
+    >
+      <div className="workspace-bar">
+        <div>
+          <span className="workspace-step">01</span>
+          <div>
+            <strong>Start with a media link</strong>
+            <small>Video, audio, clip or loop</small>
+          </div>
+        </div>
+        <span className="workspace-secure"><i /> Secure workspace</span>
+      </div>
       <form className="url-form" onSubmit={analyze}>
-        <label htmlFor="media-url">Video or audio link</label>
+        <label htmlFor="media-url">Paste a supported URL</label>
         <div className="url-control">
-          <span aria-hidden="true">↗</span>
+          <span aria-hidden="true">⌁</span>
           <input
             id="media-url"
             type="url"
@@ -131,10 +146,10 @@ export function MediaWorkspace() {
             onChange={(event) => setUrl(event.target.value)}
           />
           <button type="submit" disabled={busy}>
-            {busy && !job ? "Analyzing…" : "Analyze link"}
+            {busy && !analysis ? "Analyzing…" : "Analyze"}
           </button>
         </div>
-        <p>Your media is private and temporary. Nothing downloads before you choose an action.</p>
+        <p>Nothing downloads before you choose an action.</p>
       </form>
 
       {error && (
@@ -149,11 +164,31 @@ export function MediaWorkspace() {
 
       {!analysis && !error && (
         <div className="workspace-empty">
-          <div className="orbit" aria-hidden="true">
-            <span>▶</span>
+          <div className="preview-window" aria-hidden="true">
+            <div className="preview-sky">
+              <span className="preview-sun" />
+              <i className="mountain mountain-back" />
+              <i className="mountain mountain-front" />
+              <b>▶</b>
+            </div>
+            <div className="preview-controls">
+              <span>Ready for preview</span>
+              <i><b /></i>
+            </div>
           </div>
-          <h2>One analysis unlocks every action</h2>
-          <p>Preview metadata, inspect available formats and choose what you want to make.</p>
+          <div className="empty-copy">
+            <span>Choose after analysis</span>
+            <h2>One link unlocks every action.</h2>
+            <p>Preview metadata, inspect formats and create exactly what you need.</p>
+          </div>
+          <div className="empty-actions" aria-label="Available media actions">
+            {actions.map((item) => (
+              <span key={item.id}>
+                <b aria-hidden="true">{item.icon}</b>
+                {item.label}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
@@ -202,6 +237,7 @@ export function MediaWorkspace() {
                     key={item.id}
                     className={action === item.id ? "action-card selected" : "action-card"}
                     disabled={!available}
+                    aria-pressed={action === item.id}
                     onClick={() => setAction(item.id)}
                     type="button"
                   >
@@ -544,7 +580,14 @@ function JobCard({ job, onCancel }: { job: Job; onCancel: () => void }) {
           <strong>{job.status.replace("_", " ")}</strong>
         </div>
       </div>
-      <div className="progress-track" aria-label={`${job.progress_percent}% complete`}>
+      <div
+        className="progress-track"
+        role="progressbar"
+        aria-label="Job progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={job.progress_percent}
+      >
         <span style={{ width: `${job.progress_percent}%` }} />
       </div>
       <b>{job.progress_percent}%</b>

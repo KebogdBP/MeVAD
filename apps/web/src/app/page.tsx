@@ -1,61 +1,196 @@
 import { MediaWorkspace } from "@/components/media-workspace";
 
 export default function HomePage() {
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: "MeVAD",
+    applicationCategory: "MultimediaApplication",
+    operatingSystem: "Any",
+    browserRequirements: "Requires a modern web browser",
+    description:
+      "A web workspace for analyzing online media, downloading video, extracting audio, cutting clips and creating GIF loops.",
+    featureList: [
+      "Video downloads",
+      "Audio extraction",
+      "Precise clip cutting",
+      "GIF and video loops",
+    ],
+  };
+
   return (
     <main>
+      <a className="skip-link" href="#workspace">
+        Skip to media workspace
+      </a>
       <header className="site-header">
         <a className="brand" href="#" aria-label="MeVAD home">
           <span className="brand-mark" aria-hidden="true">
-            M
+            ↓
           </span>
-          <span>MeVAD</span>
+          <span className="brand-copy">
+            <strong>MeVAD</strong>
+            <small>Video · Audio · Clips</small>
+          </span>
         </a>
         <nav aria-label="Main navigation">
-          <a href="#workspace">Workspace</a>
+          <a href="#features">Features</a>
           <a href="#how-it-works">How it works</a>
+          <a href="#safety">Safety</a>
         </nav>
-        <span className="privacy-pill">Files auto-expire</span>
+        <a className="header-cta" href="#workspace">
+          Open workspace
+          <span aria-hidden="true">↘</span>
+        </a>
       </header>
 
-      <section className="hero" aria-labelledby="hero-title">
-        <div className="eyebrow">
-          <span />
-          One link. Every media action.
+      <section className="hero-layout" aria-labelledby="hero-title">
+        <div className="hero-copy">
+          <div className="eyebrow">
+            <span aria-hidden="true">✦</span>
+            One link · four media tools
+          </div>
+          <h1 id="hero-title">
+            Make online media
+            <em> yours to shape.</em>
+          </h1>
+          <p className="hero-lede">
+            Analyze once, then download video, extract audio, cut a precise clip or
+            create a lightweight loop — all in one calm workspace.
+          </p>
+
+          <div className="hero-actions">
+            <a className="hero-primary" href="#workspace">
+              Start with a link
+              <span aria-hidden="true">↓</span>
+            </a>
+            <a className="hero-secondary" href="#how-it-works">
+              <span className="play-dot" aria-hidden="true">▶</span>
+              See how it works
+            </a>
+          </div>
+
+          <ul className="trust-row" aria-label="Product assurances">
+            <li>
+              <span aria-hidden="true">◒</span>
+              No account needed
+            </li>
+            <li>
+              <span aria-hidden="true">◇</span>
+              Temporary files
+            </li>
+            <li>
+              <span aria-hidden="true">⌁</span>
+              Clear job progress
+            </li>
+          </ul>
         </div>
-        <h1 id="hero-title">
-          Make online media
-          <em> yours to use.</em>
-        </h1>
-        <p>
-          Analyze a link once, then download video, extract audio, cut a clip or create
-          a loop — without jumping between tools.
-        </p>
+
+        <div className="workspace-stage">
+          <div className="stage-glow stage-glow-peach" aria-hidden="true" />
+          <div className="stage-glow stage-glow-mint" aria-hidden="true" />
+          <MediaWorkspace />
+          <div className="floating-proof proof-fast" aria-hidden="true">
+            <span>↯</span>
+            <div><strong>Fast presets</strong><small>Complexity stays hidden</small></div>
+          </div>
+          <div className="floating-proof proof-private" aria-hidden="true">
+            <span>✓</span>
+            <div><strong>Private by design</strong><small>Results auto-expire</small></div>
+          </div>
+        </div>
       </section>
 
-      <MediaWorkspace />
+      <section className="feature-section" id="features" aria-labelledby="features-title">
+        <div className="section-heading">
+          <span>Built around the task</span>
+          <h2 id="features-title">Four tools. One predictable workflow.</h2>
+          <p>Useful controls when you need them, sensible defaults when you don’t.</p>
+        </div>
 
-      <section className="trust-grid" id="how-it-works" aria-label="How MeVAD works">
-        <article>
-          <span>01</span>
-          <h2>Paste a link</h2>
-          <p>We inspect metadata first. The full media is downloaded only after you choose.</p>
-        </article>
-        <article>
-          <span>02</span>
-          <h2>Choose an action</h2>
-          <p>Clear presets hide codec complexity while keeping the useful controls close.</p>
-        </article>
-        <article>
-          <span>03</span>
-          <h2>Get your result</h2>
-          <p>Follow durable progress, cancel safely and see exactly when files disappear.</p>
-        </article>
+        <div className="bento-grid">
+          <article className="bento-card bento-primary">
+            <div className="bento-icon">▣</div>
+            <span className="bento-kicker">All-in-one workspace</span>
+            <h3>Switch outputs, not websites.</h3>
+            <p>
+              The same analyzed link powers video, audio, clip and loop actions without
+              repeating the slow part.
+            </p>
+            <div className="format-ribbon" aria-label="Available actions">
+              <span>MP4</span><span>MP3</span><span>CLIP</span><span>GIF</span>
+            </div>
+          </article>
+
+          <article className="bento-card">
+            <div className="bento-icon mint">✂</div>
+            <span className="bento-kicker">Precise clipping</span>
+            <h3>Fast cut or exact boundaries.</h3>
+            <p>Choose speed for quick trims or accurate re-encoding for precise output.</p>
+          </article>
+
+          <article className="bento-card">
+            <div className="bento-icon gold">↻</div>
+            <span className="bento-kicker">Loop controls</span>
+            <h3>GIFs that fit the destination.</h3>
+            <p>Balance width, frame rate, quality and speed with a live size estimate.</p>
+          </article>
+
+          <article className="bento-card bento-wide" id="safety">
+            <div>
+              <span className="bento-kicker">Durable and transparent</span>
+              <h3>Progress you can trust.</h3>
+              <p>
+                Jobs can retry safely, be cancelled explicitly and show when a finished
+                result will expire.
+              </p>
+            </div>
+            <div className="progress-demo" aria-hidden="true">
+              <div className="progress-demo-head">
+                <span><i /> Processing media</span>
+                <strong>68%</strong>
+              </div>
+              <div><span /></div>
+              <small>Preparing output · temporary workspace</small>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section className="how-section" id="how-it-works" aria-labelledby="how-title">
+        <div className="section-heading compact">
+          <span>How it works</span>
+          <h2 id="how-title">From link to result in three clear steps.</h2>
+        </div>
+        <ol className="steps-list">
+          <li>
+            <b>01</b>
+            <div><h3>Paste a link</h3><p>We analyze metadata before any full media download begins.</p></div>
+          </li>
+          <li>
+            <b>02</b>
+            <div><h3>Choose an action</h3><p>Pick a format, quality or a precise time range.</p></div>
+          </li>
+          <li>
+            <b>03</b>
+            <div><h3>Follow the job</h3><p>Track progress, cancel safely and download the temporary result.</p></div>
+          </li>
+        </ol>
       </section>
 
       <footer>
-        <span>MeVAD · Media workspace</span>
-        <span>Built for clarity, control and trust.</span>
+        <a className="brand footer-brand" href="#" aria-label="MeVAD home">
+          <span className="brand-mark" aria-hidden="true">↓</span>
+          <span className="brand-copy"><strong>MeVAD</strong><small>Media workspace</small></span>
+        </a>
+        <p>Built for clarity, control and temporary media processing.</p>
+        <a href="https://github.com/KebogdBP/MeVAD">View source</a>
       </footer>
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
     </main>
   );
 }

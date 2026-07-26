@@ -240,6 +240,8 @@ npm run build
 
 - [Project Vision](MEGADOWNLOADER_PROJECT_VISION.md)
 - [Phase 0 — Repository Audit and Cleanup](docs/product/PHASE_0_REPOSITORY_AUDIT_AND_CLEANUP.md)
+- [Phase 7 — Design System and SaaS UX](docs/product/PHASE_7_DESIGN_SYSTEM_AND_SAAS_UX.md)
+- [Phase 7 Readiness Audit](docs/audits/PHASE_7_READINESS_AUDIT.md)
 - [Initial Repository Audit](docs/audits/INITIAL_REPOSITORY_AUDIT.md)
 - [Smart URL Analyzer Architecture](docs/architecture/SMART_URL_ANALYZER.md)
 - [Video Downloader Architecture](docs/architecture/VIDEO_DOWNLOADER.md)
