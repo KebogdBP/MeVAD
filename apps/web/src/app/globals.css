@@ -2120,6 +2120,51 @@ footer > a:last-child {
   letter-spacing: -0.045em;
 }
 
+.error-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+}
+
+.error-page > div {
+  width: min(100%, 620px);
+  padding: clamp(32px, 7vw, 72px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.error-page span {
+  color: var(--peach-deep);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.error-page h1 {
+  margin: var(--space-3) 0;
+  font: 700 clamp(36px, 7vw, 58px)/1 var(--font-display);
+  letter-spacing: -0.055em;
+}
+
+.error-page p {
+  margin: 0 auto var(--space-6);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.error-page button {
+  min-height: var(--control-min-size);
+  padding: 0 var(--space-6);
+  border: 0;
+  cursor: pointer;
+}
+
 [data-theme="dark"] body {
   background:
     radial-gradient(circle at 7% 8%, rgba(255, 146, 117, 0.1), transparent 25rem),

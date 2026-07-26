@@ -1,6 +1,6 @@
 # Phase 8 — SEO and Public Launch MVP
 
-**Статус:** in progress (Slices 8.1–8.2)
+**Статус:** in progress (Slices 8.1–8.3)
 
 **Входная точка:** commit `802c821`
 
@@ -32,10 +32,10 @@
 
 ### Slice 8.3 — Measurement and operations
 
-- [ ] Зафиксировать privacy-conscious analytics events.
-- [ ] Добавить Core Web Vitals reporting.
-- [ ] Подключить error monitoring без утечки media URL.
-- [ ] Определить dashboards для organic impressions, clicks и conversion.
+- [x] Зафиксировать privacy-conscious analytics events.
+- [x] Добавить Core Web Vitals reporting.
+- [x] Подключить error monitoring без утечки media URL.
+- [x] Определить dashboards для organic impressions, clicks и conversion.
 
 ### Slice 8.4 — Public launch readiness
 
@@ -63,13 +63,15 @@
 - Storybook accessibility;
 - production dependency audit.
 
-## Launch blockers после Slice 8.2
+## Launch blockers после Slice 8.3
 
 - Подтвердить юридическое лицо или оператора продукта и его адрес.
 - Опубликовать приватный email для privacy- и copyright-запросов.
 - Выбрать применимое право и провести юридическую проверку Terms и Privacy.
 - Определить необходимость регистрации designated copyright agent.
 - Зафиксировать production-провайдеров, фактическую географию обработки и retention.
+- Выбрать telemetry log destination и retention, затем явно включить оба
+  telemetry-флага в production.
 
 Текущий legal copy намеренно маркирован как public-launch draft и не заявляет
 соответствие конкретной юрисдикции или copyright safe-harbor.

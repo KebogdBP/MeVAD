@@ -285,6 +285,59 @@ async function auditSeoRoutes(origin) {
   );
 }
 
+async function auditTelemetryEndpoint(origin) {
+  const endpoint = `${origin}/api/telemetry`;
+  const validEvent = {
+    version: 1,
+    name: "page_view",
+    route: "/",
+    properties: {},
+  };
+  const valid = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin,
+      "sec-fetch-site": "same-origin",
+    },
+    body: JSON.stringify(validEvent),
+  });
+  const unsafe = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin,
+    },
+    body: JSON.stringify({
+      ...validEvent,
+      properties: { source_url: "https://example.com/private" },
+    }),
+  });
+  const crossOrigin = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: "https://attacker.example",
+      "sec-fetch-site": "cross-site",
+    },
+    body: JSON.stringify(validEvent),
+  });
+
+  const failures = [];
+  if (valid.status !== 204) failures.push({ check: "valid-event", status: valid.status });
+  if (valid.headers.has("set-cookie")) failures.push({ check: "cookie-free" });
+  if (unsafe.status !== 400) failures.push({ check: "unsafe-event", status: unsafe.status });
+  if (crossOrigin.status !== 403) {
+    failures.push({ check: "cross-origin-event", status: crossOrigin.status });
+  }
+  if (failures.length > 0) {
+    throw new Error(
+      `Telemetry privacy audit failed:\n${JSON.stringify(failures, null, 2)}`,
+    );
+  }
+  console.log("Telemetry privacy audit passed for allowlist, cookies and origin checks.");
+}
+
 const appPort = await freePort();
 const url = `http://127.0.0.1:${appPort}`;
 const reportsDirectory = await mkdtemp(path.join(tmpdir(), "mevad-lighthouse-"));
@@ -310,6 +363,7 @@ let auditBrowser;
 try {
   await waitForApplication(url, application, () => serverOutput);
   await auditSeoRoutes(url);
+  await auditTelemetryEndpoint(url);
   auditBrowser = await launchAuditBrowser(
     path.join(reportsDirectory, "browser-profile"),
   );

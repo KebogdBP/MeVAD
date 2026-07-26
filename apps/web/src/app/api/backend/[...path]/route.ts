@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
 
+import { recordTelemetry } from "@/lib/telemetry-server";
+
 const backendOrigin = process.env.MEVAD_API_INTERNAL_URL ?? "http://127.0.0.1:8000";
 
 async function proxy(
@@ -33,16 +35,35 @@ async function proxy(
       const value = response.headers.get(name);
       if (value) responseHeaders.set(name, value);
     }
+    if (response.status >= 500) {
+      recordTelemetry("api_proxy_failed", "/", {
+        operation: telemetryOperation(path),
+        status_class: "5xx",
+      });
+    }
     return new Response(response.body, {
       status: response.status,
       headers: responseHeaders,
     });
   } catch {
+    recordTelemetry("api_proxy_failed", "/", {
+      operation: telemetryOperation(path),
+      status_class: "network",
+    });
     return Response.json(
       { error: { code: "backend_unavailable", message: "The media service is unavailable." } },
       { status: 503 },
     );
   }
+}
+
+function telemetryOperation(path: string[]): string {
+  if (path[0] === "media" && path[1] === "analyze") return "analyze";
+  if (path[0] !== "jobs") return "unknown";
+  if (path.length === 1) return "create-job";
+  if (path.at(-1) === "cancel") return "cancel-job";
+  if (path.at(-1) === "result") return "result";
+  return "job-status";
 }
 
 export const GET = proxy;

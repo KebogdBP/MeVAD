@@ -153,7 +153,7 @@ export const infoPages = [
         title: "Why this information is used",
         paragraphs: [
           "The information is used to analyze the requested source, validate options, process the selected output, show job progress, deliver the result, diagnose failures and protect the service from abuse.",
-          "The current frontend does not include advertising trackers or product analytics. If privacy-conscious analytics are introduced, this notice and the user controls must be updated before collection begins.",
+          "The frontend includes a disabled-by-default first-party measurement capability for page views, workflow stages, Core Web Vitals and error categories. When enabled, it uses no analytics cookies or persistent visitor identifier and excludes query strings, submitted media URLs, job IDs, error messages and stack traces.",
         ],
       },
       {
@@ -166,7 +166,7 @@ export const infoPages = [
       {
         title: "Sharing, security and external sources",
         paragraphs: [
-          "A production service may rely on hosting, storage, queueing and monitoring providers to operate the workflow. Those providers and their locations must be documented before launch. Information may also be disclosed when legally required or necessary to investigate abuse or protect the service.",
+          "A production service may rely on hosting, storage, queueing and monitoring providers to operate the workflow. Those providers, their locations and the retention period for telemetry must be documented before measurement is enabled. Information may also be disclosed when legally required or necessary to investigate abuse or protect the service.",
           "No online system can promise absolute security. Source sites have their own privacy practices, and following or submitting a third-party URL does not make MeVAD responsible for that site.",
         ],
       },

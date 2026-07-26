@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   MEDIA_ACTIONS,
@@ -19,6 +19,11 @@ import {
   readApiError,
   validateActionOptions,
 } from "@/lib/media";
+import {
+  telemetryDuration,
+  telemetryFailureKind,
+  trackTelemetry,
+} from "@/lib/telemetry-client";
 
 export function MediaWorkspace() {
   const [url, setUrl] = useState("");
@@ -28,6 +33,7 @@ export function MediaWorkspace() {
   const [job, setJob] = useState<Job | null>(null);
   const [operation, setOperation] = useState<WorkspaceOperation>(null);
   const [error, setError] = useState<string | null>(null);
+  const trackedTerminalJob = useRef<string | null>(null);
 
   const availableActions = useMemo(
     () => new Set(analysis?.available_actions ?? []),
@@ -67,7 +73,24 @@ export function MediaWorkspace() {
     };
   }, [job]);
 
+  useEffect(() => {
+    if (
+      !job ||
+      !TERMINAL_JOB_STATUSES.has(job.status) ||
+      trackedTerminalJob.current === job.job_id
+    ) {
+      return;
+    }
+    trackedTerminalJob.current = job.job_id;
+    trackTelemetry("job_terminal", {
+      action: actionForJob(job),
+      status: job.status,
+    });
+  }, [job]);
+
   async function analyze() {
+    const startedAt = performance.now();
+    trackTelemetry("analysis_started");
     setOperation("analyzing");
     setError(null);
     setJob(null);
@@ -92,8 +115,16 @@ export function MediaWorkspace() {
         startSeconds: 0,
         endSeconds: Math.min(10, result.duration_seconds ?? 10),
       }));
+      trackTelemetry("analysis_succeeded", {
+        duration_ms: telemetryDuration(startedAt),
+        available_actions: Math.min(4, result.available_actions.length),
+      });
     } catch (cause) {
       setAnalysis(null);
+      trackTelemetry("analysis_failed", {
+        duration_ms: telemetryDuration(startedAt),
+        failure_kind: telemetryFailureKind(cause),
+      });
       setError(
         workspaceErrorMessage(
           cause,
@@ -120,6 +151,7 @@ export function MediaWorkspace() {
       const payload: unknown = await response.json();
       if (!response.ok) throw new Error(readApiError(payload));
       setJob(payload as Job);
+      trackTelemetry("job_created", { action });
     } catch (cause) {
       setError(
         workspaceErrorMessage(
@@ -134,6 +166,7 @@ export function MediaWorkspace() {
 
   async function cancelJob() {
     if (!job) return;
+    trackTelemetry("job_cancel_requested", { action: actionForJob(job) });
     setOperation("cancelling-job");
     setError(null);
     try {
@@ -168,10 +201,20 @@ export function MediaWorkspace() {
       actionError={actionError}
       onUrlChange={setUrl}
       onAnalyze={analyze}
-      onActionChange={setAction}
+      onActionChange={(nextAction) => {
+        setAction(nextAction);
+        trackTelemetry("action_selected", { action: nextAction });
+      }}
       onOptionsChange={setOptions}
       onCreateJob={createJob}
       onCancelJob={cancelJob}
     />
   );
+}
+
+function actionForJob(job: Job): MediaAction {
+  if (job.operation === "extract_audio") return "extract_audio";
+  if (job.operation === "cut_video") return "cut_clip";
+  if (job.operation === "make_loop") return "create_gif";
+  return "download_video";
 }

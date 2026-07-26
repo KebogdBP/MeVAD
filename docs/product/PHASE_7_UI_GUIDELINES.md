@@ -17,6 +17,9 @@
 - Phase 8.2 adds reviewed responsive bounds for long-form information pages and
   the grouped footer navigation. The layout continues to use the existing
   semantic color, spacing, radius, elevation and motion tokens.
+- Phase 8.3 adds a reviewed application-error fallback using the same semantic
+  tokens and responsive typography scale. It does not introduce a parallel
+  component style or new primitive colors.
 
 ## Neumorphism
 

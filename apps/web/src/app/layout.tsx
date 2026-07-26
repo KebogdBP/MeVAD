@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Manrope } from "next/font/google";
 import type { ReactNode } from "react";
+import { TelemetryReporter } from "@/components/telemetry-reporter";
 import { siteConfig } from "@/lib/site";
 import "./tokens.css";
 import "./globals.css";
@@ -31,6 +32,8 @@ const themeScript = `
     }
   })();
 `;
+const telemetryEnabled =
+  process.env.NEXT_PUBLIC_MEVAD_TELEMETRY_ENABLED === "true";
 
 export const metadata: Metadata = {
   metadataBase: siteConfig.url,
@@ -98,7 +101,10 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body>{children}</body>
+      <body>
+        {telemetryEnabled ? <TelemetryReporter /> : null}
+        {children}
+      </body>
     </html>
   );
 }
