@@ -19,6 +19,9 @@ Compose web-контейнер обращается к API по имени се�
 - Video, Audio, Clip и GIF/Loop actions;
 - настройки формата, доступного качества и интервала;
 - приблизительная оценка размера Video и Audio до запуска job;
+- Cutter fast/accurate modes с source-aware interval validation;
+- GIF/Loop controls для format, width, FPS, quality, speed и repeat;
+- preview metadata и приблизительный размер GIF/Loop результата;
 - создание job, polling статуса и отмена;
 - same-origin скачивание успешно завершённого результата;
 - responsive интерфейс и базовые accessibility states;
@@ -59,6 +62,14 @@ Video quality presets строятся из реально обнаруженн�
 по duration и выбранному bitrate; для WAV используется ориентир PCM 44.1 kHz
 stereo. Если analyzer не вернул достаточно metadata, UI показывает
 `Size unavailable`, а не выдуманное число.
+
+Cutter и GIF/Loop валидируются в браузере до создания job теми же продуктовыми
+границами, которые зафиксированы в FastAPI schema: end позже start и не выходит
+за duration источника, GIF/WebP не длиннее 30 секунд и не выше 30 FPS, video
+loop не длиннее 120 секунд. Backend остаётся окончательной границей доверия.
+Preview показывает длительность, режим обработки или render settings. GIF/Loop
+size — эвристика по разрешению, FPS, длительности, формату и quality preset,
+поэтому интерфейс явно обозначает её как приблизительную.
 
 Переменная `MEVAD_API_INTERNAL_URL` задаёт адрес FastAPI для Next.js server.
 По умолчанию используется `http://127.0.0.1:8000`, в Compose —

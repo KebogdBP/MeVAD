@@ -63,9 +63,13 @@ export interface ActionOptions {
   bitrate: "128" | "192" | "256" | "320";
   startSeconds: number;
   endSeconds: number;
+  cutMode: "fast" | "accurate";
   outputFormat: "gif" | "webp" | "mp4" | "webm";
   width: number;
   fps: number;
+  loopQuality: "small" | "balanced" | "high";
+  speed: "0.5" | "1" | "1.5" | "2";
+  repeat: boolean;
 }
 
 export const DEFAULT_OPTIONS: ActionOptions = {
@@ -75,9 +79,13 @@ export const DEFAULT_OPTIONS: ActionOptions = {
   bitrate: "192",
   startSeconds: 0,
   endSeconds: 10,
+  cutMode: "accurate",
   outputFormat: "gif",
   width: 640,
   fps: 15,
+  loopQuality: "balanced",
+  speed: "1",
+  repeat: true,
 };
 
 const VIDEO_QUALITIES: Array<{
@@ -164,6 +172,96 @@ export function estimateAudioSize(
   return Math.round((durationSeconds * kilobitsPerSecond * 1000) / 8);
 }
 
+export function validateActionOptions(
+  action: MediaAction,
+  analysis: MediaAnalysis,
+  options: ActionOptions,
+): string | null {
+  if (action !== "cut_clip" && action !== "create_gif") return null;
+  if (!Number.isFinite(options.startSeconds) || !Number.isFinite(options.endSeconds)) {
+    return "Start and end must be valid numbers.";
+  }
+  if (options.startSeconds < 0) return "Start cannot be negative.";
+  if (options.endSeconds <= options.startSeconds) {
+    return "End must be greater than start.";
+  }
+  if (
+    analysis.duration_seconds !== null &&
+    options.endSeconds > analysis.duration_seconds
+  ) {
+    return `End cannot exceed the source duration (${formatDuration(analysis.duration_seconds)}).`;
+  }
+  if (action === "create_gif") {
+    const duration = options.endSeconds - options.startSeconds;
+    if (
+      (options.outputFormat === "gif" || options.outputFormat === "webp") &&
+      duration > 30
+    ) {
+      return "GIF and WebP clips cannot exceed 30 seconds.";
+    }
+    if (
+      (options.outputFormat === "gif" || options.outputFormat === "webp") &&
+      options.fps > 30
+    ) {
+      return "GIF and WebP frame rate cannot exceed 30 FPS.";
+    }
+    if (
+      (options.outputFormat === "gif" || options.outputFormat === "webp") &&
+      options.width > 1280
+    ) {
+      return "GIF and WebP width cannot exceed 1280 pixels.";
+    }
+    if (
+      (options.outputFormat === "mp4" || options.outputFormat === "webm") &&
+      duration > 120
+    ) {
+      return "Video loops cannot exceed 120 seconds.";
+    }
+  }
+  return null;
+}
+
+export function outputDuration(options: ActionOptions): number {
+  return (options.endSeconds - options.startSeconds) / Number(options.speed);
+}
+
+export function estimateLoopSize(
+  analysis: MediaAnalysis,
+  options: ActionOptions,
+): number | null {
+  const duration = outputDuration(options);
+  if (!Number.isFinite(duration) || duration <= 0) return null;
+  const source = [...analysis.formats]
+    .filter(
+      (format) =>
+        format.has_video &&
+        format.width !== null &&
+        format.height !== null &&
+        format.width > 0 &&
+        format.height > 0,
+    )
+    .sort((left, right) => (right.height ?? 0) - (left.height ?? 0))[0];
+  const aspectRatio =
+    source?.width && source.height ? source.height / source.width : 9 / 16;
+  const height = Math.max(1, Math.round(options.width * aspectRatio));
+  const qualityFactor = {
+    small: 0.05,
+    balanced: 0.08,
+    high: 0.12,
+  }[options.loopQuality];
+  const formatFactor =
+    options.outputFormat === "gif"
+      ? 1.35
+      : options.outputFormat === "webp"
+        ? 0.75
+        : options.outputFormat === "webm"
+          ? 0.45
+          : 0.5;
+  return Math.round(
+    options.width * height * options.fps * duration * qualityFactor * formatFactor,
+  );
+}
+
 export function formatFileSize(bytes: number | null): string {
   if (bytes === null || !Number.isFinite(bytes) || bytes < 0) return "Size unavailable";
   if (bytes < 1024) return `${Math.round(bytes)} B`;
@@ -210,7 +308,7 @@ export function buildJobPayload(
       options: {
         start_seconds: options.startSeconds,
         end_seconds: options.endSeconds,
-        mode: "accurate",
+        mode: options.cutMode,
       },
     };
   }
@@ -223,9 +321,9 @@ export function buildJobPayload(
       output_format: options.outputFormat,
       width: options.width,
       fps: options.fps,
-      quality: "balanced",
-      speed: "1",
-      repeat: true,
+      quality: options.loopQuality,
+      speed: options.speed,
+      repeat: options.repeat,
     },
   };
 }

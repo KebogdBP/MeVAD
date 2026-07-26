@@ -4,12 +4,15 @@ import {
   availableVideoQualities,
   buildJobPayload,
   estimateAudioSize,
+  estimateLoopSize,
   estimateVideoSize,
   formatDuration,
   formatFileSize,
   isResultAvailable,
+  outputDuration,
   readApiError,
   resultDownloadUrl,
+  validateActionOptions,
 } from "./media";
 
 describe("media workflow helpers", () => {
@@ -114,5 +117,87 @@ describe("media workflow helpers", () => {
     expect(estimateAudioSize(60, "mp3", "192")).toBe(1_440_000);
     expect(estimateAudioSize(60, "wav", "128")).toBe(10_584_000);
     expect(estimateAudioSize(null, "mp3", "192")).toBeNull();
+  });
+
+  it("validates clip bounds against the analyzed source", () => {
+    const analysis = {
+      source_url: "https://example.com/video",
+      extractor: "Example",
+      media_id: "video-1",
+      title: "Video",
+      author: null,
+      duration_seconds: 20,
+      thumbnail_url: null,
+      webpage_url: "https://example.com/video",
+      is_playlist: false,
+      playlist_entry_count: null,
+      formats,
+      subtitle_languages: [],
+      available_actions: ["cut_clip"],
+    };
+
+    expect(
+      validateActionOptions("cut_clip", analysis, {
+        ...DEFAULT_OPTIONS,
+        startSeconds: 10,
+        endSeconds: 5,
+      }),
+    ).toBe("End must be greater than start.");
+    expect(
+      validateActionOptions("cut_clip", analysis, {
+        ...DEFAULT_OPTIONS,
+        endSeconds: 21,
+      }),
+    ).toContain("source duration");
+  });
+
+  it("enforces animated limits and estimates loop preview metadata", () => {
+    const analysis = {
+      source_url: "https://example.com/video",
+      extractor: "Example",
+      media_id: "video-1",
+      title: "Video",
+      author: null,
+      duration_seconds: 60,
+      thumbnail_url: null,
+      webpage_url: "https://example.com/video",
+      is_playlist: false,
+      playlist_entry_count: null,
+      formats,
+      subtitle_languages: [],
+      available_actions: ["create_gif"],
+    };
+    const options = {
+      ...DEFAULT_OPTIONS,
+      endSeconds: 40,
+      speed: "2" as const,
+    };
+
+    expect(validateActionOptions("create_gif", analysis, options)).toBe(
+      "GIF and WebP clips cannot exceed 30 seconds.",
+    );
+    expect(outputDuration(options)).toBe(20);
+    expect(
+      estimateLoopSize(analysis, { ...options, endSeconds: 20 }),
+    ).toBeGreaterThan(0);
+  });
+
+  it("builds selected cut and loop controls into job payloads", () => {
+    expect(
+      buildJobPayload("cut_clip", "https://example.com/video", {
+        ...DEFAULT_OPTIONS,
+        cutMode: "fast",
+      }),
+    ).toMatchObject({ options: { mode: "fast" } });
+    expect(
+      buildJobPayload("create_gif", "https://example.com/video", {
+        ...DEFAULT_OPTIONS,
+        loopQuality: "high",
+        speed: "1.5",
+        repeat: false,
+      }),
+    ).toMatchObject({
+      options: { quality: "high", speed: "1.5", repeat: false },
+    });
   });
 });

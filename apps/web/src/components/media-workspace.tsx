@@ -10,12 +10,15 @@ import {
   availableVideoQualities,
   buildJobPayload,
   estimateAudioSize,
+  estimateLoopSize,
   formatDuration,
   estimateVideoSize,
   formatFileSize,
   isResultAvailable,
+  outputDuration,
   readApiError,
   resultDownloadUrl,
+  validateActionOptions,
 } from "@/lib/media";
 
 const actions: Array<{ id: MediaAction; icon: string; label: string; hint: string }> = [
@@ -39,6 +42,10 @@ export function MediaWorkspace() {
   const availableActions = useMemo(
     () => new Set(analysis?.available_actions ?? []),
     [analysis],
+  );
+  const actionError = useMemo(
+    () => (analysis ? validateActionOptions(action, analysis, options) : null),
+    [action, analysis, options],
   );
 
   useEffect(() => {
@@ -81,7 +88,7 @@ export function MediaWorkspace() {
   }
 
   async function createJob() {
-    if (!analysis) return;
+    if (!analysis || actionError) return;
     setBusy(true);
     setError(null);
     try {
@@ -213,7 +220,18 @@ export function MediaWorkspace() {
               onChange={setOptions}
             />
 
-            <button className="primary-action" type="button" onClick={createJob} disabled={busy}>
+            {actionError && (
+              <p className="field-error" role="alert">
+                {actionError}
+              </p>
+            )}
+
+            <button
+              className="primary-action"
+              type="button"
+              onClick={createJob}
+              disabled={busy || actionError !== null}
+            >
               {busy ? "Starting…" : `Create ${actions.find((item) => item.id === action)?.label} job`}
               <span aria-hidden="true">→</span>
             </button>
@@ -303,38 +321,135 @@ function ActionFields({
       </>
     );
   }
+  if (action === "cut_clip") {
+    const duration = options.endSeconds - options.startSeconds;
+    return (
+      <>
+        <div className="field-row">
+          <NumberField
+            label="Start (seconds)"
+            value={options.startSeconds}
+            max={analysis.duration_seconds ?? undefined}
+            onChange={(startSeconds) => onChange({ ...options, startSeconds })}
+          />
+          <NumberField
+            label="End (seconds)"
+            value={options.endSeconds}
+            max={analysis.duration_seconds ?? undefined}
+            onChange={(endSeconds) => onChange({ ...options, endSeconds })}
+          />
+        </div>
+        <div className="field-row single-field">
+          <SelectField
+            label="Cut mode"
+            value={options.cutMode}
+            values={["accurate", "fast"]}
+            onChange={(cutMode) =>
+              onChange({ ...options, cutMode: cutMode as ActionOptions["cutMode"] })
+            }
+          />
+        </div>
+        <div className="output-preview">
+          <span>Output preview</span>
+          <strong>{duration > 0 ? formatDuration(duration) : "Invalid interval"}</strong>
+          <small>
+            {options.cutMode === "fast"
+              ? "Fast · starts near the closest keyframe · no re-encode"
+              : "Accurate · precise boundaries · H.264/AAC re-encode"}
+          </small>
+        </div>
+      </>
+    );
+  }
+
+  const animated = options.outputFormat === "gif" || options.outputFormat === "webp";
+  const fpsValues = animated ? ["10", "15", "24", "30"] : ["15", "24", "30", "60"];
+  const estimatedBytes = estimateLoopSize(analysis, options);
   return (
     <>
       <div className="field-row">
         <NumberField
           label="Start (seconds)"
           value={options.startSeconds}
+          max={analysis.duration_seconds ?? undefined}
           onChange={(startSeconds) => onChange({ ...options, startSeconds })}
         />
         <NumberField
           label="End (seconds)"
           value={options.endSeconds}
+          max={analysis.duration_seconds ?? undefined}
           onChange={(endSeconds) => onChange({ ...options, endSeconds })}
         />
       </div>
-      {action === "create_gif" && (
-        <div className="field-row">
-          <SelectField
-            label="Output"
-            value={options.outputFormat}
-            values={["gif", "webp", "mp4", "webm"]}
-            onChange={(outputFormat) =>
-              onChange({ ...options, outputFormat: outputFormat as ActionOptions["outputFormat"] })
-            }
-          />
-          <SelectField
-            label="Width"
-            value={String(options.width)}
-            values={["480", "640", "960", "1280"]}
-            onChange={(width) => onChange({ ...options, width: Number(width) })}
-          />
-        </div>
-      )}
+      <div className="field-row">
+        <SelectField
+          label="Output"
+          value={options.outputFormat}
+          values={["gif", "webp", "mp4", "webm"]}
+          onChange={(outputFormat) => {
+            const nextFormat = outputFormat as ActionOptions["outputFormat"];
+            onChange({
+              ...options,
+              outputFormat: nextFormat,
+              fps:
+                (nextFormat === "gif" || nextFormat === "webp") && options.fps > 30
+                  ? 30
+                  : options.fps,
+            });
+          }}
+        />
+        <SelectField
+          label="Width"
+          value={String(options.width)}
+          values={["480", "640", "960", "1280"]}
+          onChange={(width) => onChange({ ...options, width: Number(width) })}
+        />
+      </div>
+      <div className="field-row">
+        <SelectField
+          label="Frame rate"
+          value={String(options.fps)}
+          values={fpsValues}
+          onChange={(fps) => onChange({ ...options, fps: Number(fps) })}
+        />
+        <SelectField
+          label="Quality"
+          value={options.loopQuality}
+          values={["small", "balanced", "high"]}
+          onChange={(loopQuality) =>
+            onChange({
+              ...options,
+              loopQuality: loopQuality as ActionOptions["loopQuality"],
+            })
+          }
+        />
+      </div>
+      <div className="field-row">
+        <SelectField
+          label="Speed"
+          value={options.speed}
+          values={["0.5", "1", "1.5", "2"]}
+          onChange={(speed) =>
+            onChange({ ...options, speed: speed as ActionOptions["speed"] })
+          }
+        />
+        <CheckboxField
+          label="Repeat playback"
+          checked={options.repeat}
+          onChange={(repeat) => onChange({ ...options, repeat })}
+        />
+      </div>
+      <div className="output-preview">
+        <span>Output preview</span>
+        <strong>
+          {options.outputFormat.toUpperCase()} · {formatDuration(outputDuration(options))} ·{" "}
+          {formatFileSize(estimatedBytes)}
+        </strong>
+        <small>
+          {options.width}px · {options.fps} FPS · {options.loopQuality} quality ·{" "}
+          {options.speed}× speed
+        </small>
+      </div>
     </>
   );
 }
@@ -373,10 +488,12 @@ function SelectField({
 function NumberField({
   label,
   value,
+  max,
   onChange,
 }: {
   label: string;
   value: number;
+  max?: number;
   onChange: (value: number) => void;
 }) {
   return (
@@ -385,10 +502,32 @@ function NumberField({
       <input
         type="number"
         min={0}
+        max={max}
         step="0.1"
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
       />
+    </label>
+  );
+}
+
+function CheckboxField({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="checkbox-field">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span>{label}</span>
     </label>
   );
 }

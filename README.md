@@ -7,9 +7,9 @@
 
 ## Статус
 
-Фундамент Phase 1–4 и пользовательский Video & Audio MVP из Phase 5 завершены.
-Сейчас проект находится на Phase 6: возможности Cutter/GIF уже реализованы в
-core и выведены в первый интерфейс, но сама фаза ещё не закрыта. Уже доступны:
+Фундамент Phase 1–4, пользовательский Video & Audio MVP из Phase 5 и
+Cutter/GIF workflow из Phase 6 завершены. Сейчас проект находится на Phase 7:
+выделение дизайн-системы и доведение SaaS UX. Уже доступны:
 
 - устанавливаемый Python-пакет `mevad`;
 - типизированные доменные модели;
@@ -45,6 +45,8 @@ core и выведены в первый интерфейс, но сама фа�
 - создание job, polling прогресса и отмена через server-side API proxy.
 - контролируемая потоковая выдача готового результата с проверкой job state и TTL.
 - выбор реально доступных video quality presets и приблизительная оценка размера.
+- Cutter с fast/accurate режимами, проверкой интервала и preview metadata.
+- GIF/Loop UI с output format, width, FPS, quality, speed, repeat и size estimate.
 - responsive SaaS-интерфейс и отдельные frontend quality gates.
 - proxy-enforced network sandbox для analyzer и media downloads в Compose.
 
