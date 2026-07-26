@@ -240,19 +240,19 @@ def _terminate(process: subprocess.Popen[str]) -> None:
     if process.poll() is not None:
         return
     try:
-        if os.name == "posix":
-            os.killpg(process.pid, signal.SIGTERM)  # type: ignore[attr-defined]
-        else:
+        if sys.platform == "win32":
             process.terminate()
+        else:
+            os.killpg(process.pid, signal.SIGTERM)
         process.wait(timeout=2)
         return
     except (OSError, subprocess.TimeoutExpired):
         pass
     try:
-        if os.name == "posix":
-            os.killpg(process.pid, signal.SIGKILL)  # type: ignore[attr-defined]
-        else:
+        if sys.platform == "win32":
             process.kill()
+        else:
+            os.killpg(process.pid, signal.SIGKILL)
         process.wait(timeout=2)
     except (OSError, subprocess.TimeoutExpired):
         process.kill()
