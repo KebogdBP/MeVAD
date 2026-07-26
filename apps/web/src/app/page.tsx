@@ -54,10 +54,10 @@ export default function HomePage() {
               Start with a link
               <span aria-hidden="true">↓</span>
             </a>
-            <a className="hero-secondary" href="#how-it-works">
+            <Link className="hero-secondary" href="/how-it-works">
               <span className="play-dot" aria-hidden="true">▶</span>
               See how it works
-            </a>
+            </Link>
           </div>
 
           <ul className="trust-row" aria-label="Product assurances">

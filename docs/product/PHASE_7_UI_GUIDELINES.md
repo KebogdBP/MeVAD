@@ -14,6 +14,9 @@
 - Phase 8 adds reviewed responsive layout bounds for the task landing template
   and manifest theme colors. Component colors and reusable spacing still use the
   existing semantic tokens; the updated fingerprint freezes these additions.
+- Phase 8.2 adds reviewed responsive bounds for long-form information pages and
+  the grouped footer navigation. The layout continues to use the existing
+  semantic color, spacing, radius, elevation and motion tokens.
 
 ## Neumorphism
 

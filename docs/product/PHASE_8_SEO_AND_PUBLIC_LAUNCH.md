@@ -1,6 +1,6 @@
 # Phase 8 — SEO and Public Launch MVP
 
-**Статус:** in progress (Slice 8.1)
+**Статус:** in progress (Slices 8.1–8.2)
 
 **Входная точка:** commit `802c821`
 
@@ -25,10 +25,10 @@
 
 ### Slice 8.2 — Trust and information architecture
 
-- [ ] Создать How It Works и Supported Sites.
-- [ ] Добавить Privacy, Terms, Copyright и acceptable-use positioning.
-- [ ] Добавить согласованную глобальную навигацию и footer IA.
-- [ ] Проверить отсутствие thin/duplicate content.
+- [x] Создать How It Works и Supported Sites.
+- [x] Добавить Privacy, Terms, Copyright и acceptable-use positioning.
+- [x] Добавить согласованную глобальную навигацию и footer IA.
+- [x] Проверить отсутствие thin/duplicate content.
 
 ### Slice 8.3 — Measurement and operations
 
@@ -62,3 +62,14 @@
 - Lighthouse SEO и accessibility;
 - Storybook accessibility;
 - production dependency audit.
+
+## Launch blockers после Slice 8.2
+
+- Подтвердить юридическое лицо или оператора продукта и его адрес.
+- Опубликовать приватный email для privacy- и copyright-запросов.
+- Выбрать применимое право и провести юридическую проверку Terms и Privacy.
+- Определить необходимость регистрации designated copyright agent.
+- Зафиксировать production-провайдеров, фактическую географию обработки и retention.
+
+Текущий legal copy намеренно маркирован как public-launch draft и не заявляет
+соответствие конкретной юрисдикции или copyright safe-harbor.

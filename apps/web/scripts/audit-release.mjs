@@ -27,6 +27,11 @@ const publicPaths = [
   "/audio-downloader",
   "/video-cutter",
   "/video-to-gif",
+  "/how-it-works",
+  "/supported-sites",
+  "/privacy",
+  "/terms",
+  "/copyright",
 ];
 const publicOrigin = (
   process.env.NEXT_PUBLIC_SITE_URL ?? "https://mevad.app"
@@ -86,7 +91,13 @@ async function stopProcess(process) {
     new Promise((resolve) => process.once("exit", resolve)),
     new Promise((resolve) => setTimeout(resolve, 3_000)),
   ]);
-  if (process.exitCode === null) process.kill("SIGKILL");
+  if (process.exitCode === null) {
+    process.kill("SIGKILL");
+    await Promise.race([
+      new Promise((resolve) => process.once("exit", resolve)),
+      new Promise((resolve) => setTimeout(resolve, 3_000)),
+    ]);
+  }
 }
 
 async function launchAuditBrowser(profileDirectory) {
@@ -179,7 +190,32 @@ async function runLighthouse({ url, mode, reportPath, browserPort }) {
       report.audits[auditId]?.displayValue ?? "n/a",
     ]),
   );
-  return { scores, metrics };
+  const failingAudits = Object.fromEntries(
+    Object.keys(thresholds[mode]).map((category) => {
+      const auditRefs = report.categories[category]?.auditRefs ?? [];
+      return [
+        category,
+        auditRefs
+          .map(({ id }) => report.audits[id])
+          .filter(
+            (audit) =>
+              audit &&
+              typeof audit.score === "number" &&
+              audit.score < 1 &&
+              !["informative", "manual", "notApplicable"].includes(
+                audit.scoreDisplayMode,
+              ),
+          )
+          .map((audit) => ({
+            id: audit.id,
+            score: audit.score,
+            title: audit.title,
+            displayValue: audit.displayValue,
+          })),
+      ];
+    }),
+  );
+  return { scores, metrics, failingAudits };
 }
 
 async function auditSeoRoutes(origin) {
@@ -311,5 +347,10 @@ try {
 } finally {
   if (auditBrowser) await stopProcess(auditBrowser.process);
   await stopProcess(application);
-  await rm(reportsDirectory, { recursive: true, force: true });
+  await rm(reportsDirectory, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 200,
+  });
 }

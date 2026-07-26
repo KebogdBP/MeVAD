@@ -12,9 +12,9 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
 const navigation = [
-  { href: "/#features", label: "Features" },
   { href: "/video-downloader", label: "Tools" },
-  { href: "/#how-it-works", label: "How it works" },
+  { href: "/how-it-works", label: "How it works" },
+  { href: "/supported-sites", label: "Supported sources" },
   { href: "/#safety", label: "Safety" },
 ] as const;
 
@@ -70,7 +70,7 @@ export function SiteHeaderView({
 }: SiteHeaderViewProps) {
   return (
     <header className="site-header">
-      <Link className="brand" href="/" aria-label="MeVAD home">
+      <Link className="brand" href="/">
         <span className="brand-mark" aria-hidden="true">
           ↓
         </span>

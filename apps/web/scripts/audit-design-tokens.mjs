@@ -26,7 +26,7 @@ const fingerprint = createHash("sha256")
   .update(JSON.stringify({ colors, spacing }))
   .digest("hex");
 const approvedLegacyFingerprint =
-  "18530b243c05b5029540f68d86933ba87813d8425daf6779b22c702160a54d9c";
+  "18f3d83c8f4b6e7d6cb8318e0be17d332b1555801f27c585477cd864164b12e8";
 const componentLiterals = [];
 for (const file of (await sourceFiles("src"))
   .filter((candidate) => /\.(ts|tsx)$/.test(candidate))
