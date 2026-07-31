@@ -35,6 +35,16 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://mevad:mevad@localhost:5432/mevad"
     redis_url: str = "redis://localhost:6379/0"
     redis_queue_name: str = "mevad:jobs"
+    abuse_protection_enabled: bool = False
+    abuse_backend: Literal["memory", "redis"] = "memory"
+    abuse_client_salt: str = "development-only-change-me"
+    trust_proxy_headers: bool = False
+    analyze_rate_limit: int = Field(default=10, ge=1, le=10000)
+    analyze_rate_window_seconds: int = Field(default=60, ge=1, le=86400)
+    job_create_rate_limit: int = Field(default=5, ge=1, le=10000)
+    job_create_rate_window_seconds: int = Field(default=60, ge=1, le=86400)
+    anonymous_active_job_limit: int = Field(default=2, ge=1, le=100)
+    anonymous_job_slot_ttl_seconds: int = Field(default=10800, ge=60, le=86400)
     auto_create_schema: bool = False
     worker_poll_timeout_seconds: int = Field(default=5, ge=1, le=60)
     worker_media_timeout_seconds: int = Field(default=7200, ge=60, le=86400)
@@ -73,6 +83,12 @@ class Settings(BaseSettings):
             raise ValueError("Worker heartbeat interval must be shorter than its lease.")
         if self.worker_retry_max_seconds < self.worker_retry_base_seconds:
             raise ValueError("Worker retry maximum must not be shorter than its base.")
+        if (
+            self.environment == "production"
+            and self.abuse_protection_enabled
+            and len(self.abuse_client_salt) < 32
+        ):
+            raise ValueError("Production abuse client salt must be at least 32 characters.")
         if self.analyzer_enabled and self.network_sandbox != "external_proxy":
             raise ValueError("Enabled analyzer requires the external proxy network sandbox.")
         if self.network_sandbox == "external_proxy":

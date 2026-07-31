@@ -14,6 +14,7 @@ from mevad.jobs import (
 from mevad.jobs.redis_queue import RedisJobQueue
 from mevad.jobs.sql_repository import SqlJobRepository
 from mevad.runtime import RuntimeTools, discover_runtime_tools
+from mevad_api.abuse import AbuseProtector, create_abuse_protector
 from mevad_api.config import Settings, get_settings
 from mevad_api.routes import health, jobs, media
 from mevad_worker.storage import WorkspaceManager
@@ -26,6 +27,7 @@ def create_app(
     runtime_tools: RuntimeTools | None = None,
     job_service: JobService | None = None,
     job_queue: JobQueue | None = None,
+    abuse_protector: AbuseProtector | None = None,
 ) -> FastAPI:
     """Create an isolated API application instance."""
 
@@ -49,7 +51,9 @@ def create_app(
     app.state.job_queue = selected_queue
     app.state.job_service = job_service or _create_job_service(selected_settings, selected_queue)
     app.state.workspace_manager = WorkspaceManager(selected_settings.storage_root)
+    app.state.abuse_protector = abuse_protector or create_abuse_protector(selected_settings)
     app.router.add_event_handler("shutdown", app.state.job_service.close)
+    app.router.add_event_handler("shutdown", app.state.abuse_protector.close)
 
     app.include_router(health.router)
     app.include_router(media.router, prefix=selected_settings.api_prefix)

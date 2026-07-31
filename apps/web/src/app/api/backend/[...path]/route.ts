@@ -18,6 +18,9 @@ async function proxy(
       method: request.method,
       headers: {
         accept: request.headers.get("accept") ?? "application/json",
+        ...(request.headers.get("x-forwarded-for")
+          ? { "x-forwarded-for": request.headers.get("x-forwarded-for")! }
+          : {}),
         ...(body ? { "content-type": request.headers.get("content-type") ?? "application/json" } : {}),
       },
       body,
@@ -31,6 +34,9 @@ async function proxy(
       "content-length",
       "content-type",
       "x-content-type-options",
+      "retry-after",
+      "x-ratelimit-limit",
+      "x-ratelimit-remaining",
     ]) {
       const value = response.headers.get(name);
       if (value) responseHeaders.set(name, value);

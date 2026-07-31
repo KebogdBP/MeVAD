@@ -3,6 +3,10 @@ x-production-environment: &production-environment
   MEVAD_API_DOCS_ENABLED: "false"
   MEVAD_DATABASE_URL: ${MEVAD_DATABASE_URL:?Set MEVAD_DATABASE_URL with URL-encoded credentials}
   MEVAD_STORAGE_RETENTION_SECONDS: ${MEVAD_STORAGE_RETENTION_SECONDS:-86400}
+  MEVAD_ABUSE_PROTECTION_ENABLED: "true"
+  MEVAD_ABUSE_BACKEND: redis
+  MEVAD_ABUSE_CLIENT_SALT: ${MEVAD_ABUSE_CLIENT_SALT:?Set a random MEVAD_ABUSE_CLIENT_SALT of at least 32 characters}
+  MEVAD_TRUST_PROXY_HEADERS: "true"
 
 x-production-service: &production-service
   restart: unless-stopped

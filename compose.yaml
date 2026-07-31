@@ -58,6 +58,10 @@ services:
       MEVAD_JOB_BACKEND: postgres
       MEVAD_QUEUE_BACKEND: redis
       MEVAD_REDIS_URL: redis://redis:6379/0
+      MEVAD_ABUSE_PROTECTION_ENABLED: "true"
+      MEVAD_ABUSE_BACKEND: redis
+      MEVAD_ABUSE_CLIENT_SALT: ${MEVAD_ABUSE_CLIENT_SALT:-development-only-change-me}
+      MEVAD_TRUST_PROXY_HEADERS: "true"
       MEVAD_REQUIRE_MEDIA_TOOLS: "false"
       MEVAD_STORAGE_ROOT: /app/storage/jobs
       MEVAD_ANALYZER_ENABLED: "true"

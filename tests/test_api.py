@@ -16,6 +16,7 @@ from mevad.models import (
     SourceKind,
 )
 from mevad.runtime import RuntimeTools
+from mevad_api.abuse import AbuseProtector
 from mevad_api.app import create_app
 from mevad_api.config import Settings
 
@@ -102,6 +103,11 @@ def test_settings_require_proxy_sandbox_for_enabled_analyzer() -> None:
         _settings(network_sandbox="external_proxy", media_proxy_url="socks5://proxy:1080")
 
 
+def test_settings_require_long_abuse_salt_in_production() -> None:
+    with pytest.raises(ValidationError, match="at least 32 characters"):
+        Settings(environment="production", abuse_protection_enabled=True, abuse_client_salt="short")
+
+
 def test_analyzer_is_disabled_by_default_without_calling_adapter() -> None:
     analyzer = FakeAnalyzer()
     with _client(analyzer=analyzer) as client:
@@ -164,6 +170,25 @@ def test_analyzer_returns_normalized_response_when_enabled() -> None:
             value="https://example.com/video",
         )
     ]
+
+
+def test_analyzer_rate_limit_returns_retry_headers() -> None:
+    analyzer = FakeAnalyzer()
+    settings = _settings(
+        analyzer_enabled=True,
+        abuse_protection_enabled=True,
+        analyze_rate_limit=1,
+    )
+    with _client(settings=settings, analyzer=analyzer) as client:
+        first = client.post("/api/v1/media/analyze", json={"url": "https://example.com/one"})
+        second = client.post("/api/v1/media/analyze", json={"url": "https://example.com/two"})
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["error"]["code"] == "rate_limit_exceeded"
+    assert second.headers["retry-after"]
+    assert second.headers["x-ratelimit-limit"] == "1"
+    assert len(analyzer.calls) == 1
 
 
 def test_analyzer_maps_invalid_url_to_stable_error() -> None:
@@ -242,6 +267,33 @@ def test_creates_reads_and_cancels_video_job() -> None:
     assert cancel_response.json()["version"] == 2
     assert cancel_response.json()["result_expires_at"] is not None
     assert cancel_response.json()["storage_deleted_at"] is None
+
+
+def test_active_job_quota_is_released_after_cancellation() -> None:
+    job_ids = iter(["job-1", "job-2"])
+    service = JobService(InMemoryJobRepository(), job_id_factory=lambda: next(job_ids))
+    settings = _settings(
+        abuse_protection_enabled=True,
+        anonymous_active_job_limit=1,
+        job_create_rate_limit=10,
+    )
+    payload = {
+        "operation": "download_video",
+        "source_url": "https://example.com/video",
+        "options": {"quality": "720p", "container": "mp4"},
+    }
+    with _client(settings=settings, job_service=service) as client:
+        first = client.post("/api/v1/jobs", json=payload)
+        blocked = client.post("/api/v1/jobs", json=payload)
+        cancelled = client.post("/api/v1/jobs/job-1/cancel")
+        second = client.post("/api/v1/jobs", json=payload)
+
+    assert first.status_code == 201
+    assert blocked.status_code == 429
+    assert blocked.json()["error"]["code"] == "anonymous_job_limit_reached"
+    assert cancelled.status_code == 200
+    assert second.status_code == 201
+    assert second.json()["job_id"] == "job-2"
 
 
 def test_job_api_validates_discriminated_options() -> None:
@@ -423,12 +475,14 @@ def _client(
     analyzer: FakeAnalyzer | None = None,
     runtime_tools: RuntimeTools | None = None,
     job_service: JobService | None = None,
+    abuse_protector: AbuseProtector | None = None,
 ) -> Iterator[TestClient]:
     app = create_app(
         settings=settings or _settings(),
         analyzer=analyzer or FakeAnalyzer(),
         runtime_tools=runtime_tools or RuntimeTools(ffmpeg="/bin/ffmpeg", ffprobe="/bin/ffprobe"),
         job_service=job_service,
+        abuse_protector=abuse_protector,
     )
     with TestClient(app) as client:
         yield client
