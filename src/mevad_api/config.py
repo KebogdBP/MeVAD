@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = Field(default=8000, ge=1, le=65535)
     api_docs_enabled: bool = True
+    api_log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    api_log_format: Literal["json", "text"] = "json"
+    metrics_enabled: bool = True
     require_media_tools: bool = True
     analyzer_enabled: bool = False
     network_sandbox: Literal["disabled", "external_proxy"] = "disabled"

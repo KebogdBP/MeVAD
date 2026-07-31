@@ -21,6 +21,9 @@ async function proxy(
         ...(request.headers.get("x-forwarded-for")
           ? { "x-forwarded-for": request.headers.get("x-forwarded-for")! }
           : {}),
+        ...(request.headers.get("x-request-id")
+          ? { "x-request-id": request.headers.get("x-request-id")! }
+          : {}),
         ...(body ? { "content-type": request.headers.get("content-type") ?? "application/json" } : {}),
       },
       body,
@@ -37,6 +40,7 @@ async function proxy(
       "retry-after",
       "x-ratelimit-limit",
       "x-ratelimit-remaining",
+      "x-request-id",
     ]) {
       const value = response.headers.get(name);
       if (value) responseHeaders.set(name, value);

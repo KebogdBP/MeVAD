@@ -9,6 +9,7 @@ from mevad.jobs import JobService
 from mevad.runtime import RuntimeTools
 from mevad_api.abuse import AbuseProtector
 from mevad_api.config import Settings
+from mevad_api.observability import MetricsRegistry
 from mevad_worker.storage import WorkspaceManager
 
 
@@ -46,9 +47,14 @@ def get_abuse_protector(request: Request) -> AbuseProtector:
     return cast(AbuseProtector, request.app.state.abuse_protector)
 
 
+def get_metrics_registry(request: Request) -> MetricsRegistry:
+    return cast(MetricsRegistry, request.app.state.metrics_registry)
+
+
 SettingsDependency = Annotated[Settings, Depends(get_app_settings)]
 AnalyzerDependency = Annotated[MediaAnalyzer, Depends(get_media_analyzer)]
 RuntimeToolsDependency = Annotated[RuntimeTools, Depends(get_runtime_tools)]
 JobServiceDependency = Annotated[JobService, Depends(get_job_service)]
 WorkspaceManagerDependency = Annotated[WorkspaceManager, Depends(get_workspace_manager)]
 AbuseProtectorDependency = Annotated[AbuseProtector, Depends(get_abuse_protector)]
+MetricsRegistryDependency = Annotated[MetricsRegistry, Depends(get_metrics_registry)]

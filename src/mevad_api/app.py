@@ -16,6 +16,7 @@ from mevad.jobs.sql_repository import SqlJobRepository
 from mevad.runtime import RuntimeTools, discover_runtime_tools
 from mevad_api.abuse import AbuseProtector, create_abuse_protector
 from mevad_api.config import Settings, get_settings
+from mevad_api.observability import MetricsRegistry, ObservabilityMiddleware, configure_http_logging
 from mevad_api.routes import health, jobs, media
 from mevad_worker.storage import WorkspaceManager
 
@@ -28,6 +29,7 @@ def create_app(
     job_service: JobService | None = None,
     job_queue: JobQueue | None = None,
     abuse_protector: AbuseProtector | None = None,
+    metrics_registry: MetricsRegistry | None = None,
 ) -> FastAPI:
     """Create an isolated API application instance."""
 
@@ -43,6 +45,12 @@ def create_app(
         openapi_url=openapi_url,
     )
     app.state.settings = selected_settings
+    app.state.metrics_registry = metrics_registry or MetricsRegistry()
+    configure_http_logging(
+        level=selected_settings.api_log_level,
+        json_output=selected_settings.api_log_format == "json",
+    )
+    app.add_middleware(ObservabilityMiddleware, metrics=app.state.metrics_registry)
     app.state.media_analyzer = analyzer or YtDlpAnalyzer(
         proxy_url=selected_settings.media_proxy_url
     )

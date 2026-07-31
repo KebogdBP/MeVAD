@@ -51,6 +51,30 @@ def test_liveness_reports_service_version() -> None:
     }
 
 
+def test_request_id_is_preserved_and_metrics_are_recorded() -> None:
+    with _client() as client:
+        response = client.get(
+            "/health/live",
+            headers={"x-request-id": "launch-check-123"},
+        )
+        metrics = client.get("/metrics")
+
+    assert response.headers["x-request-id"] == "launch-check-123"
+    assert metrics.status_code == 200
+    assert metrics.headers["cache-control"] == "no-store"
+    assert 'mevad_http_requests_total{method="GET",status_class="2xx"} 1' in metrics.text
+
+
+def test_invalid_request_id_is_replaced_and_metrics_can_be_disabled() -> None:
+    with _client(settings=_settings(metrics_enabled=False)) as client:
+        response = client.get("/health/live", headers={"x-request-id": "unsafe value"})
+        metrics = client.get("/metrics")
+
+    assert response.headers["x-request-id"] != "unsafe value"
+    assert len(response.headers["x-request-id"]) == 32
+    assert metrics.status_code == 404
+
+
 def test_readiness_requires_media_tools_by_default() -> None:
     with _client(runtime_tools=RuntimeTools(ffmpeg=None, ffprobe=None)) as client:
         response = client.get("/health/ready")
