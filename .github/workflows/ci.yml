@@ -20,6 +20,7 @@ jobs:
           NEXT_PUBLIC_SITE_URL: https://mevad.example.com
           MEVAD_POSTGRES_PASSWORD: ci-only-password
           MEVAD_DATABASE_URL: postgresql+psycopg://mevad:ci-only-password@postgres:5432/mevad
+          MEVAD_ABUSE_CLIENT_SALT: ci-only-abuse-client-salt-32-chars
         run: docker compose -f compose.yaml -f compose.production.yaml config --quiet
 
       - name: Validate Caddy ingress
